@@ -1,4 +1,5 @@
-import { createNoteId, type Note, type NoteChanges, type NoteColor, type NoteId, type Rect } from '../types';
+import { createNoteId, type Note, type NoteChanges, type NoteColor, type NoteId, type Rect, type Size } from '../types';
+import { clampPosition, clampSize } from '../utils/geometry';
 
 type Listener = () => void;
 
@@ -88,6 +89,15 @@ export class NotesStore {
     const current = this.notes.get(id);
     if (!current || current.z === this.nextZ - 1) return;
     this.update(id, { z: this.nextZ++ });
+  }
+
+  /** Pulls notes that no longer fit (e.g. after the window shrank) back inside the bounds. */
+  constrainTo(bounds: Size): void {
+    this.notes.forEach((note, id) => {
+      const size = clampSize(note.width, note.height, { x: 0, y: 0 }, bounds);
+      const position = clampPosition(note.x, note.y, size, bounds);
+      this.update(id, { ...position, ...size });
+    });
   }
 
   /** Replaces all notes, e.g. when hydrating from storage or the API. */

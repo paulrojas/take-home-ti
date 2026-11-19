@@ -1,4 +1,5 @@
-import { memo, useCallback, useRef, useSyncExternalStore, type PointerEvent } from 'react';
+import { memo, useCallback, useEffect, useRef, useSyncExternalStore, type PointerEvent } from 'react';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useStore } from '../store/AppContext';
 import { DRAW_THRESHOLD, fitNoteRect, normalizeRect } from '../utils/geometry';
 import { beginPointerDrag } from '../utils/pointerDrag';
@@ -15,6 +16,17 @@ function BoardImpl() {
   const boardRef = useRef<HTMLDivElement>(null);
   const trashRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
+
+  // Keep notes reachable when the window shrinks; checked once on mount and after resizing settles.
+  const constrainNotes = useDebouncedCallback(() => {
+    const board = boardRef.current;
+    if (board) store.constrainTo({ width: board.clientWidth, height: board.clientHeight });
+  }, 150);
+  useEffect(() => {
+    constrainNotes();
+    window.addEventListener('resize', constrainNotes);
+    return () => window.removeEventListener('resize', constrainNotes);
+  }, [constrainNotes]);
 
   const onPointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {

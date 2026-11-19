@@ -80,4 +80,18 @@ describe('NotesStore', () => {
     const b = store.create(rect);
     expect(store.getNote(b)!.z).toBeGreaterThan(store.getNote(a)!.z);
   });
+
+  it('constrainTo pulls oversized and out-of-bounds notes back in and leaves fitting ones alone', () => {
+    const store = new NotesStore();
+    const fits = store.create({ x: 10, y: 10, width: 200, height: 200 });
+    const outside = store.create({ x: 900, y: 500, width: 300, height: 300 });
+    const onFits = vi.fn();
+    store.subscribeNote(fits, onFits);
+
+    store.constrainTo({ width: 800, height: 600 });
+
+    expect(store.getNote(fits)).toMatchObject({ x: 10, y: 10, width: 200, height: 200 });
+    expect(onFits).not.toHaveBeenCalled();
+    expect(store.getNote(outside)).toMatchObject({ x: 500, y: 300, width: 300, height: 300 });
+  });
 });

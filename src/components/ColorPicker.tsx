@@ -38,7 +38,7 @@ function ColorPickerImpl({ current, onPick }: ColorPickerProps) {
   );
 
   return (
-    <div className="color-picker" ref={rootRef} data-nodrag>
+    <div className="color-picker" ref={rootRef}>
       <button
         type="button"
         className="icon-button"
@@ -54,7 +54,7 @@ function ColorPickerImpl({ current, onPick }: ColorPickerProps) {
         </svg>
       </button>
       {open && (
-        <div className="color-picker__popover" role="menu" data-nodrag>
+        <div className="color-picker__popover" role="menu">
           {NOTE_COLORS.map((color) => (
             <button
               key={color}
