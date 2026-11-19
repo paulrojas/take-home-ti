@@ -11,7 +11,9 @@ Take-home **Sticky Notes** SPA; the brief is `docs/requirements.md`. Hard constr
 ```bash
 npm run dev                        # Vite dev server
 npm run build                      # tsc --noEmit && vite build -> single inlined dist/index.html (works from file://)
-npm run typecheck
+npm run typecheck                  # app + e2e
+npm run e2e                        # build, then Playwright (chromium, firefox, edge) against dist/index.html over file://
+npx playwright test --project=chromium e2e/move.spec.ts   # one browser / one spec
 npm test                           # vitest run
 npx vitest run src/__tests__/notesStore.test.ts   # single test file
 npx vitest run -t "brings a note"                 # single test by name
@@ -27,3 +29,4 @@ npx vitest run -t "brings a note"                 # single test by name
 - Untrusted data (storage/API) goes through `parseNotes` in `persistence.ts` (validation, versioned payload).
 - Min-resolution guard: `useTooSmallViewport` (debounced) + `ResolutionWarning` overlay; board stays mounted underneath.
 - Types: `NoteId` is branded; build ids with `createNoteId`/`asNoteId` only.
+- E2E (`e2e/`) loads the **built** `dist/index.html`, so rebuild before running (`npm run e2e` does). Use roles/labels first; `data-testid` only for structural elements (`board`, `trash`, `note-header`, `resize-handle`). Assert geometry with a small tolerance and poll (`expect.poll`, `settledBox`) instead of fixed sleeps. Playwright device presets use 1280x720, which trips the app's resolution guard; keep the explicit viewport in `playwright.config.ts`.

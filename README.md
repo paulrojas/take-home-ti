@@ -10,6 +10,8 @@ npm run dev        # dev server
 npm run build      # type-checks, then writes a single self-contained dist/index.html
 npm run preview    # serve the production build
 npm test           # unit tests (Vitest)
+npm run e2e:install  # once: download Playwright browsers (Chromium, Firefox, Edge)
+npm run e2e          # builds, then runs the end-to-end suite in all browsers
 ```
 
 `dist/index.html` has all JS and CSS inlined, so it also opens directly from disk (`file://`).
@@ -28,3 +30,16 @@ npm test           # unit tests (Vitest)
 - **Drag and resize never touch React state.** `src/utils/pointerDrag.ts` runs pointer-captured, `requestAnimationFrame`-throttled drags; components mutate the element's style through refs and commit once on release.
 - Handlers are stable (`useCallback`, `memo`); text edits, cache writes, API saves and window-resize checks are debounced.
 - Escape cancels a drag in progress.
+
+## End-to-end tests (Playwright)
+
+`e2e/` drives the **built `dist/index.html` over `file://`** with real mouse and keyboard input in Chromium (Chrome engine), Firefox and Microsoft Edge. It covers every feature in the brief, fast and imprecise pointer movement, isolation between drag/resize/delete, storage-write strategy, persistence/API restore and the minimum-resolution guard.
+
+```bash
+npm run e2e                          # all browsers
+npx playwright test --project=edge   # one browser (chromium | firefox | edge)
+npm run e2e:ui                       # interactive runner
+npx playwright show-report           # last HTML report, traces on failure
+```
+
+Limits: a green run shows the app works in those engines on the machine that ran it. Edge shares Chromium's engine; Safari/WebKit, other operating systems and older browser versions are not covered. Device presets default to a 1280x720 viewport, which is below the app's 768px minimum height, so the config sets 1280x800 explicitly.

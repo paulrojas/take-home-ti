@@ -58,7 +58,7 @@ function BoardImpl() {
   );
 
   return (
-    <div className="board" ref={boardRef} onPointerDown={onPointerDown}>
+    <div className="board" data-testid="board" ref={boardRef} onPointerDown={onPointerDown}>
       {ids.map((id) => (
         <Note key={id} id={id} boardRef={boardRef} trashRef={trashRef} />
       ))}

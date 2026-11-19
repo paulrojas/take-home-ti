@@ -41,11 +41,13 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
       ref={noteRef}
       className={`note note--${note.color}`}
       style={{ transform: translate(note.x, note.y), width: note.width, height: note.height, zIndex: note.z }}
+      role="group"
+      aria-label="Sticky note"
       tabIndex={0}
       onPointerDown={onPointerDown}
       onKeyDown={deletion.onNoteKeyDown}
     >
-      <div className="note__header" ref={headerRef} onPointerDown={onHeaderPointerDown}>
+      <div className="note__header" data-testid="note-header" ref={headerRef} onPointerDown={onHeaderPointerDown}>
         <ColorPicker current={note.color} onPick={onPickColor} />
         <button type="button" className="icon-button" aria-label="Delete note" onClick={deletion.requestRemove}>
           <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -63,7 +65,7 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
         onChange={text.onChange}
         onBlur={text.onBlur}
       />
-      <div className="note__resize" onPointerDown={onResizePointerDown} aria-hidden="true" />
+      <div className="note__resize" data-testid="resize-handle" onPointerDown={onResizePointerDown} aria-hidden="true" />
       {deletion.confirming && (
         <DeleteConfirmation cancelRef={deletion.cancelRef} onConfirm={deletion.confirmRemove} onCancel={deletion.cancelRemove} />
       )}
