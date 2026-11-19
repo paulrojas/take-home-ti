@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
+import { memo, useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useStore, useSync } from '../store/AppContext';
 import { useNote } from '../store/useNote';
@@ -33,6 +33,8 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmMessageId = useId();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const commitText = useDebouncedCallback((text: string) => store.update(id, { text }), TEXT_COMMIT_DELAY_MS);
@@ -61,20 +63,31 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setConfirmingDelete(true);
   }, [store, id]);
-  const cancelRemove = useCallback(() => {
-    setConfirmingDelete(false);
-    // The focused Cancel button is about to unmount; return focus to whatever had it before the dialog.
+  const cancelRemove = useCallback(() => setConfirmingDelete(false), []);
+  const confirmRemove = useCallback(() => store.remove(id), [store, id]);
+
+  // While the dialog is open the content behind it must not be reachable by keyboard or screen reader.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const covered = root.querySelectorAll<HTMLElement>('.note__header, .note__text');
+    if (confirmingDelete) {
+      covered.forEach((el) => (el.inert = true));
+      cancelRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    covered.forEach((el) => (el.inert = false));
+    // Inert is lifted first so the element that had focus before the dialog can take it back.
     const previous = previousFocusRef.current;
     previousFocusRef.current = null;
     if (previous?.isConnected) previous.focus({ preventScroll: true });
-  }, []);
-  const confirmRemove = useCallback(() => store.remove(id), [store, id]);
+  }, [confirmingDelete]);
 
   const onRootKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       // Handled here rather than on the dialog: clicking its backdrop focuses the note root instead.
-      if (event.key === 'Escape' && confirmingDelete) {
-        cancelRemove();
+      if (confirmingDelete) {
+        if (event.key === 'Escape') cancelRemove();
         return;
       }
       // Only when the note itself is focused, so typing in the textarea never deletes the note.
@@ -202,14 +215,14 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
       />
       <div className="note__resize" onPointerDown={onResizePointerDown} aria-hidden="true" />
       {confirmingDelete && (
-        <div className="note__confirm" role="alertdialog" aria-label="Delete this note?">
-          <p>Delete this note?</p>
+        <div className="note__confirm" role="alertdialog" aria-modal="true" aria-describedby={confirmMessageId}>
+          <p id={confirmMessageId}>Delete this note?</p>
           <div className="note__confirm-actions">
             <button type="button" className="confirm-button confirm-button--danger" onClick={confirmRemove}>
               Delete
             </button>
             {/* Cancel takes focus so a stray Enter never destroys content. */}
-            <button type="button" className="confirm-button" autoFocus onClick={cancelRemove}>
+            <button type="button" className="confirm-button" ref={cancelRef} onClick={cancelRemove}>
               Cancel
             </button>
           </div>

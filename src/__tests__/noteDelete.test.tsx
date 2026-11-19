@@ -74,6 +74,15 @@ describe('Note delete button', () => {
     expect(store.getNote(id)).toBeUndefined();
   });
 
+  it('Backspace on a focused empty note deletes it immediately', () => {
+    render();
+    const note = container.querySelector<HTMLElement>('.note')!;
+    act(() => {
+      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+    });
+    expect(store.getNote(id)).toBeUndefined();
+  });
+
   it('treats whitespace-only text as empty', () => {
     render();
     type('   \n ');
@@ -111,6 +120,39 @@ describe('Note delete button', () => {
     expect(dialog()).toBeNull();
     expect(store.getNote(id)).toBeDefined();
     expect(container.querySelector('textarea')!.value).toBe('keep me');
+  });
+
+  it('makes the content behind the dialog inert and the dialog modal, then restores it', () => {
+    render();
+    type('keep me');
+    click(deleteButton());
+
+    expect(dialog()!.getAttribute('aria-modal')).toBe('true');
+    expect(dialog()!.getAttribute('aria-describedby')).toBe(dialog()!.querySelector('p')!.id);
+    expect(container.querySelector<HTMLElement>('.note__text')!.inert).toBe(true);
+    expect(container.querySelector<HTMLElement>('.note__header')!.inert).toBe(true);
+
+    click(cancelButton());
+    expect(container.querySelector<HTMLElement>('.note__text')!.inert).toBe(false);
+    expect(container.querySelector<HTMLElement>('.note__header')!.inert).toBe(false);
+  });
+
+  it('ignores the Delete key while the dialog is open', () => {
+    render();
+    type('keep me');
+    act(() => deleteButton().focus());
+    click(deleteButton());
+    const note = container.querySelector<HTMLElement>('.note')!;
+    act(() => note.focus());
+    act(() => {
+      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+    });
+    act(() => {
+      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    // Focus still goes back to the original trigger, not to the note root the Delete key was sent to.
+    expect(document.activeElement).toBe(deleteButton());
   });
 
   it('focuses Cancel by default so Enter cannot delete', () => {
