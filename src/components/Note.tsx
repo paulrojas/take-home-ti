@@ -56,13 +56,18 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
     if (textRef.current?.value.trim()) setConfirmingDelete(true);
     else store.remove(id);
   }, [store, id]);
-  const cancelRemove = useCallback(() => setConfirmingDelete(false), []);
+  const cancelRemove = useCallback(() => {
+    setConfirmingDelete(false);
+    // The focused Cancel button is about to unmount; hand focus back so keyboard users keep their place.
+    rootRef.current?.focus();
+  }, []);
   const confirmRemove = useCallback(() => store.remove(id), [store, id]);
 
   const onConfirmKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
     setConfirmingDelete(false);
+    rootRef.current?.focus();
   }, []);
 
   const onRootKeyDown = useCallback(
