@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
-import { useStore } from '../store/AppContext';
+import { useStore, useSync } from '../store/AppContext';
 import { useNote } from '../store/useNote';
 import type { NoteColor, NoteId, Size } from '../types';
 import { clampPosition, clampSize, pointInEdges } from '../utils/geometry';
@@ -32,6 +32,7 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
   const note = useNote(id);
   const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const commitText = useDebouncedCallback((text: string) => store.update(id, { text }), TEXT_COMMIT_DELAY_MS);
@@ -53,32 +54,47 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
   // Notes with text ask for confirmation; empty ones are removed right away.
   const requestRemove = useCallback(() => {
     // The textarea is the source of truth: its latest edit may still be waiting on the debounce.
-    if (textRef.current?.value.trim()) setConfirmingDelete(true);
-    else store.remove(id);
+    if (!textRef.current?.value.trim()) {
+      store.remove(id);
+      return;
+    }
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setConfirmingDelete(true);
   }, [store, id]);
   const cancelRemove = useCallback(() => {
     setConfirmingDelete(false);
-    // The focused Cancel button is about to unmount; hand focus back so keyboard users keep their place.
-    rootRef.current?.focus();
+    // The focused Cancel button is about to unmount; return focus to whatever had it before the dialog.
+    const previous = previousFocusRef.current;
+    previousFocusRef.current = null;
+    if (previous?.isConnected) previous.focus({ preventScroll: true });
   }, []);
   const confirmRemove = useCallback(() => store.remove(id), [store, id]);
 
-  const onConfirmKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Escape') return;
-    event.stopPropagation();
-    setConfirmingDelete(false);
-    rootRef.current?.focus();
-  }, []);
-
   const onRootKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
+      // Handled here rather than on the dialog: clicking its backdrop focuses the note root instead.
+      if (event.key === 'Escape' && confirmingDelete) {
+        cancelRemove();
+        return;
+      }
       // Only when the note itself is focused, so typing in the textarea never deletes the note.
       if (event.target === event.currentTarget && (event.key === 'Delete' || event.key === 'Backspace')) {
         requestRemove();
       }
     },
-    [requestRemove],
+    [confirmingDelete, cancelRemove, requestRemove],
   );
+
+  // Text still waiting on its debounce would be lost when the page unloads.
+  const sync = useSync();
+  useEffect(() => {
+    const flushPending = (): void => {
+      commitText.flush();
+      sync.flush();
+    };
+    window.addEventListener('pagehide', flushPending);
+    return () => window.removeEventListener('pagehide', flushPending);
+  }, [commitText, sync]);
 
   const onHeaderPointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
@@ -186,7 +202,7 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
       />
       <div className="note__resize" onPointerDown={onResizePointerDown} aria-hidden="true" />
       {confirmingDelete && (
-        <div className="note__confirm" role="alertdialog" aria-label="Delete this note?" onKeyDown={onConfirmKeyDown}>
+        <div className="note__confirm" role="alertdialog" aria-label="Delete this note?">
           <p>Delete this note?</p>
           <div className="note__confirm-actions">
             <button type="button" className="confirm-button confirm-button--danger" onClick={confirmRemove}>
