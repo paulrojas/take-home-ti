@@ -2,6 +2,10 @@
 
 Single-page sticky notes app. TypeScript + React (no component libraries) and plain CSS.
 
+## DEMO
+You can test the solution for this exercise from this GitHub's page
+https://paulrojas.github.io/take-home-ti/
+
 ## Run
 
 ```bash
