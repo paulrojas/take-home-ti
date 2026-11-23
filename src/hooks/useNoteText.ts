@@ -14,10 +14,10 @@ interface NoteTextHandlers {
  * Text editing for one note. The textarea is uncontrolled (typing never re-renders), edits reach the store
  * debounced, and pending text is flushed on blur and when the page goes away.
  */
-export function useNoteText(id: NoteId, textRef: RefObject<HTMLTextAreaElement>, text: string | undefined): NoteTextHandlers {
+export function useNoteText(id: NoteId, textRef: RefObject<HTMLTextAreaElement | null>, text: string | undefined): NoteTextHandlers {
   const store = useStore();
   const sync = useSync();
-  const commit = useDebouncedCallback((value: string) => store.update(id, { text: value }), TEXT_COMMIT_DELAY_MS);
+  const commit = useDebouncedCallback((value: string) => store.getState().update(id, { text: value }), TEXT_COMMIT_DELAY_MS);
 
   // Keep the textarea in line with external changes (e.g. data arriving from the API) unless it is being edited.
   useEffect(() => {

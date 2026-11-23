@@ -6,7 +6,7 @@ import { createMockNotesApi } from '../services/notesApi';
 import { createLocalNotesCache } from '../services/persistence';
 import { SyncController } from '../services/syncController';
 import { AppProvider } from '../store/AppContext';
-import { NotesStore } from '../store/notesStore';
+import { createNotesStore, type NotesStore } from '../store/notesStore';
 import type { NoteId } from '../types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,8 +44,8 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  store = new NotesStore();
-  id = store.create({ x: 100, y: 100, width: 200, height: 200 });
+  store = createNotesStore();
+  id = store.getState().create({ x: 100, y: 100, width: 200, height: 200 });
   changes = 0;
 
   const board = document.createElement('div');
@@ -66,7 +66,7 @@ beforeEach(() => {
       </AppProvider>,
     );
   });
-  store.subscribeChanges(() => (changes += 1));
+  store.subscribe(() => (changes += 1));
 });
 
 afterEach(() => {
@@ -87,7 +87,7 @@ describe('moving a note', () => {
 
     pointer(header(), 'pointerup', 200, 170);
     expect(changes).toBe(1);
-    expect(store.getNote(id)).toMatchObject({ x: 150, y: 160, width: 200, height: 200 });
+    expect(store.getState().notes[id]).toMatchObject({ x: 150, y: 160, width: 200, height: 200 });
     expect(note().classList.contains('note--dragging')).toBe(false);
   });
 
@@ -96,7 +96,7 @@ describe('moving a note', () => {
     pointer(header(), 'pointermove', 5000, -5000);
     pointer(header(), 'pointerup', 5000, -5000);
 
-    expect(store.getNote(id)).toMatchObject({ x: BOARD.width - 200, y: 0 });
+    expect(store.getState().notes[id]).toMatchObject({ x: BOARD.width - 200, y: 0 });
   });
 
   it('applies the final position even if the last move was never flushed by a frame', () => {
@@ -104,7 +104,7 @@ describe('moving a note', () => {
     pointer(header(), 'pointermove', 170, 130);
     pointer(header(), 'pointerup', 190, 150);
 
-    expect(store.getNote(id)).toMatchObject({ x: 140, y: 140 });
+    expect(store.getState().notes[id]).toMatchObject({ x: 140, y: 140 });
   });
 
   it('Escape cancels and restores the original position', () => {
@@ -116,7 +116,7 @@ describe('moving a note', () => {
     });
 
     expect(note().style.transform).toBe('translate3d(100px, 100px, 0)');
-    expect(store.getNote(id)).toMatchObject({ x: 100, y: 100 });
+    expect(store.getState().notes[id]).toMatchObject({ x: 100, y: 100 });
     expect(changes).toBe(0);
   });
 
@@ -138,7 +138,7 @@ describe('moving a note', () => {
 
     expect(note().classList.contains('note--resizing')).toBe(false);
     pointer(header(), 'pointerup', 150, 110, 1);
-    expect(store.getNote(id)).toMatchObject({ width: 200, height: 200 });
+    expect(store.getState().notes[id]).toMatchObject({ width: 200, height: 200 });
   });
 });
 
@@ -150,7 +150,28 @@ describe('deleting by dragging to the trash', () => {
     expect(note().classList.contains('note--doomed')).toBe(true);
 
     pointer(header(), 'pointerup', 850, 500);
-    expect(store.getNote(id)).toBeUndefined();
+    expect(store.getState().notes[id]).toBeUndefined();
+  });
+
+  it('deletes when the card covers the trash even though the pointer is outside it', () => {
+    pointer(header(), 'pointerdown', 150, 110);
+    // The note ends at x 620-820, y 300-500: its body overlaps the trash, the pointer (670, 310) does not.
+    pointer(header(), 'pointermove', 670, 310);
+    frame();
+    expect(note().classList.contains('note--doomed')).toBe(true);
+
+    pointer(header(), 'pointerup', 670, 310);
+    expect(store.getState().notes[id]).toBeUndefined();
+  });
+
+  it('keeps the note when the card only touches the trash edge', () => {
+    pointer(header(), 'pointerdown', 150, 110);
+    // Note x 600-800 and y 250-450 meets the trash corner at exactly (800, 450).
+    pointer(header(), 'pointermove', 650, 260);
+    frame();
+    expect(note().classList.contains('note--doomed')).toBe(false);
+    pointer(header(), 'pointerup', 650, 260);
+    expect(store.getState().notes[id]).toBeDefined();
   });
 
   it('keeps the note when released outside the trash, even after passing over it', () => {
@@ -162,7 +183,7 @@ describe('deleting by dragging to the trash', () => {
     expect(note().classList.contains('note--doomed')).toBe(false);
 
     pointer(header(), 'pointerup', 400, 300);
-    expect(store.getNote(id)).toBeDefined();
+    expect(store.getState().notes[id]).toBeDefined();
   });
 
   it('Escape over the trash cancels without deleting', () => {
@@ -173,7 +194,7 @@ describe('deleting by dragging to the trash', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
 
-    expect(store.getNote(id)).toMatchObject({ x: 100, y: 100 });
+    expect(store.getState().notes[id]).toMatchObject({ x: 100, y: 100 });
   });
 });
 
@@ -189,19 +210,19 @@ describe('resizing a note', () => {
 
     pointer(grip(), 'pointerup', 395, 345);
     expect(changes).toBe(1);
-    expect(store.getNote(id)).toMatchObject({ x: 100, y: 100, width: 300, height: 250 });
+    expect(store.getState().notes[id]).toMatchObject({ x: 100, y: 100, width: 300, height: 250 });
   });
 
   it('enforces the minimum size and the board edge', () => {
     pointer(grip(), 'pointerdown', 295, 295);
     pointer(grip(), 'pointermove', -900, -900);
     pointer(grip(), 'pointerup', -900, -900);
-    expect(store.getNote(id)).toMatchObject({ width: 120, height: 120 });
+    expect(store.getState().notes[id]).toMatchObject({ width: 120, height: 120 });
 
     pointer(grip(), 'pointerdown', 195, 195);
     pointer(grip(), 'pointermove', 9000, 9000);
     pointer(grip(), 'pointerup', 9000, 9000);
-    expect(store.getNote(id)).toMatchObject({ width: BOARD.width - 100, height: BOARD.height - 100 });
+    expect(store.getState().notes[id]).toMatchObject({ width: BOARD.width - 100, height: BOARD.height - 100 });
   });
 
   it('never deletes the note, even when released over the trash zone', () => {
@@ -209,18 +230,18 @@ describe('resizing a note', () => {
     pointer(grip(), 'pointermove', 850, 500);
     pointer(grip(), 'pointerup', 850, 500);
 
-    expect(store.getNote(id)).toBeDefined();
-    expect(store.getNote(id)).toMatchObject({ x: 100, y: 100 });
+    expect(store.getState().notes[id]).toBeDefined();
+    expect(store.getState().notes[id]).toMatchObject({ x: 100, y: 100 });
   });
 });
 
 describe('stacking', () => {
   it('pressing anywhere on a note brings it to the front', () => {
-    const other = store.create({ x: 500, y: 100, width: 200, height: 200 });
-    expect(store.getNote(other)!.z).toBeGreaterThan(store.getNote(id)!.z);
+    const other = store.getState().create({ x: 500, y: 100, width: 200, height: 200 });
+    expect(store.getState().notes[other]!.z).toBeGreaterThan(store.getState().notes[id]!.z);
 
     pointer(note(), 'pointerdown', 120, 120);
     pointer(note(), 'pointerup', 120, 120);
-    expect(store.getNote(id)!.z).toBeGreaterThan(store.getNote(other)!.z);
+    expect(store.getState().notes[id]!.z).toBeGreaterThan(store.getState().notes[other]!.z);
   });
 });

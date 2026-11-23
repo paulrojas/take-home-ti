@@ -11,6 +11,8 @@ export function useDebouncedCallback<A extends unknown[]>(fn: (...args: A) => vo
     fnRef.current = fn;
   });
 
+  // The ref is read when the timer fires, never during render.
+  // eslint-disable-next-line react-hooks/refs
   const debounced = useMemo(() => debounce((...args: A) => fnRef.current(...args), delay), [delay]);
   useEffect(() => () => debounced.flush(), [debounced]);
   return debounced;

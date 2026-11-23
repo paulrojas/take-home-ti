@@ -6,7 +6,7 @@ import {
   clampSize,
   fitNoteRect,
   normalizeRect,
-  pointInEdges,
+  rectsOverlap,
 } from '../utils/geometry';
 
 const bounds = { width: 1000, height: 600 };
@@ -18,10 +18,12 @@ describe('geometry', () => {
     expect(clamp(-1, 0, 10)).toBe(0);
   });
 
-  it('pointInEdges is inclusive', () => {
+  it('rectsOverlap detects shared area but not touching edges', () => {
     const edges = { left: 10, top: 10, right: 20, bottom: 20 };
-    expect(pointInEdges({ x: 10, y: 20 }, edges)).toBe(true);
-    expect(pointInEdges({ x: 21, y: 15 }, edges)).toBe(false);
+    expect(rectsOverlap({ left: 15, top: 15, right: 40, bottom: 40 }, edges)).toBe(true);
+    expect(rectsOverlap({ left: 0, top: 0, right: 100, bottom: 100 }, edges)).toBe(true);
+    expect(rectsOverlap({ left: 20, top: 10, right: 30, bottom: 20 }, edges)).toBe(false);
+    expect(rectsOverlap({ left: 30, top: 30, right: 40, bottom: 40 }, edges)).toBe(false);
   });
 
   it('clampPosition keeps notes fully inside the board', () => {

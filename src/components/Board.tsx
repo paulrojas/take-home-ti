@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useRef, useSyncExternalStore, type PointerEvent } from 'react';
+import { memo, useCallback, useEffect, useRef, type PointerEvent } from 'react';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useStore } from '../store/AppContext';
+import { selectIds, useNotes } from '../store/useNotes';
 import { DRAW_THRESHOLD, fitNoteRect, normalizeRect } from '../utils/geometry';
 import { beginPointerDrag } from '../utils/pointerDrag';
 import { Note } from './Note';
@@ -12,7 +13,7 @@ import { TrashZone } from './TrashZone';
  */
 function BoardImpl() {
   const store = useStore();
-  const ids = useSyncExternalStore(store.subscribeIds, store.getIds);
+  const ids = useNotes(selectIds);
   const boardRef = useRef<HTMLDivElement>(null);
   const trashRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
@@ -20,7 +21,7 @@ function BoardImpl() {
   // Keep notes reachable when the window shrinks; checked once on mount and after resizing settles.
   const constrainNotes = useDebouncedCallback(() => {
     const board = boardRef.current;
-    if (board) store.constrainTo({ width: board.clientWidth, height: board.clientHeight });
+    if (board) store.getState().constrainTo({ width: board.clientWidth, height: board.clientHeight });
   }, 150);
   useEffect(() => {
     constrainNotes();
@@ -50,7 +51,7 @@ function BoardImpl() {
         onEnd(_dx, _dy, _pointer, cancelled) {
           ghost.hidden = true;
           if (cancelled || Math.max(drawn.width, drawn.height) < DRAW_THRESHOLD) return;
-          store.create(fitNoteRect(drawn, { width: board.clientWidth, height: board.clientHeight }));
+          store.getState().create(fitNoteRect(drawn, { width: board.clientWidth, height: board.clientHeight }));
         },
       });
     },

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { APP_URL, CACHE_KEY, SERVER_KEY, cacheWrites, installCacheWriteSpy, openApp, readStorage, trackErrors, within } from './support/app';
 import { addNote, board, dragHeaderBy, headerGrabPoint, note, notes, resizeBy, settledBox, textArea } from './support/notes';
 
-const savedStatus = (page: Page) => page.getByRole('status').filter({ hasText: 'All changes saved' });
+const savedStatus = (page: Page) => page.getByRole('status', { name: 'Save status' }).filter({ hasText: 'All changes saved' });
 
 test('reload restores position, size, text and color', async ({ page }) => {
   await openApp(page);
@@ -42,7 +42,7 @@ test('a drag does not write to storage on every movement, only once after releas
   expect(await cacheWrites(page)).toBe(baseline);
   await expect(savedStatus(page)).toBeVisible();
   await page.mouse.up();
-  await expect(page.getByRole('status')).toHaveText('Saving…');
+  await expect(page.getByRole('status', { name: 'Save status' })).toHaveText('Saving…');
 
   await expect.poll(() => cacheWrites(page)).toBe(baseline + 1);
 });
@@ -65,7 +65,7 @@ test('the save status moves from Saving to All changes saved', async ({ page }) 
   await openApp(page);
   await addNote(page);
 
-  await expect(page.getByRole('status')).toHaveText('Saving…');
+  await expect(page.getByRole('status', { name: 'Save status' })).toHaveText('Saving…');
   await expect(savedStatus(page)).toBeVisible();
   expect(await readStorage(page, SERVER_KEY)).toHaveLength(1);
 });

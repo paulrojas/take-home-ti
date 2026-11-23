@@ -15,7 +15,7 @@ function SyncIndicator() {
   const status = useSyncExternalStore(sync.subscribe, sync.getStatus);
 
   return (
-    <div className={`sync sync--${status}`} role="status" aria-live="polite">
+    <div className={`sync sync--${status}`} role="status" aria-label="Save status" aria-live="polite">
       <span>{STATUS_LABELS[status]}</span>
       {status === 'error' && (
         <button type="button" className="link-button" onClick={sync.retry}>
@@ -30,7 +30,8 @@ function ToolbarImpl() {
   const store = useStore();
 
   const addNote = useCallback(() => {
-    store.create(cascadeRect(store.getIds().length));
+    const { create, ids } = store.getState();
+    create(cascadeRect(ids.length));
   }, [store]);
 
   return (

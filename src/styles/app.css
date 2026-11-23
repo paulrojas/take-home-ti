@@ -262,52 +262,39 @@ button {
   opacity: 1;
 }
 
-.note__confirm {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
+.toast-region {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 1500000;
+  pointer-events: none;
+}
+
+.toast {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 2px;
-  cursor: default;
+  gap: 16px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 6px;
+  background: #323130;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
 }
 
-.note__confirm p {
-  margin: 0;
-  font-weight: 600;
-}
-
-.note__confirm-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.confirm-button {
-  height: 30px;
-  padding: 0 14px;
-  border: 1px solid #8a8886;
+.toast__action {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 4px;
-  background: #fff;
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.confirm-button:hover {
-  background: #f3f2f1;
-}
-
-.confirm-button--danger {
-  border-color: var(--danger);
-  background: var(--danger);
-  color: #fff;
-}
-
-.confirm-button--danger:hover {
-  background: #a52214;
+.toast__action:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .icon-button {

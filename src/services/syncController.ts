@@ -1,4 +1,4 @@
-import type { NotesStore } from '../store/notesStore';
+import { selectAllNotes, type NotesStore } from '../store/notesStore';
 import { debounce } from '../utils/debounce';
 import type { NotesApi } from './notesApi';
 import type { NotesCache } from './persistence';
@@ -22,7 +22,7 @@ export class SyncController {
   private applyingRemote = false;
   private started = false;
 
-  private readonly writeCache = debounce(() => this.cache.save(this.store.getAll()), CACHE_DEBOUNCE_MS);
+  private readonly writeCache = debounce(() => this.cache.save(selectAllNotes(this.store.getState())), CACHE_DEBOUNCE_MS);
   private readonly pushRemote = debounce(() => void this.save(), API_DEBOUNCE_MS);
 
   constructor(
@@ -42,8 +42,11 @@ export class SyncController {
     if (this.started) return;
     this.started = true;
 
-    this.store.replaceAll(this.cache.load());
-    this.store.subscribeChanges(this.onStoreChange);
+    this.store.getState().replaceAll(this.cache.load());
+    // Only note content is synced; the undo history changing is not a reason to save.
+    this.store.subscribe((state, previous) => {
+      if (state.notes !== previous.notes) this.onStoreChange();
+    });
     window.addEventListener('pagehide', this.flush);
 
     void this.hydrateFromApi();
@@ -69,13 +72,13 @@ export class SyncController {
   };
 
   private async hydrateFromApi(): Promise<void> {
-    const versionAtStart = this.store.getVersion();
+    const notesAtStart = this.store.getState().notes;
     try {
       const remote = await this.api.fetchNotes();
-      if (this.store.getVersion() !== versionAtStart) return;
+      if (this.store.getState().notes !== notesAtStart) return;
       this.applyingRemote = true;
       try {
-        this.store.replaceAll(remote);
+        this.store.getState().replaceAll(remote);
       } finally {
         this.applyingRemote = false;
       }
@@ -89,7 +92,7 @@ export class SyncController {
     const sequence = ++this.saveSequence;
     this.setStatus('saving');
     try {
-      await this.api.saveNotes(this.store.getAll());
+      await this.api.saveNotes(selectAllNotes(this.store.getState()));
       if (sequence === this.saveSequence) this.setStatus('saved');
     } catch {
       if (sequence === this.saveSequence) this.setStatus('error');

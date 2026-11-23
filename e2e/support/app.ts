@@ -47,6 +47,7 @@ export async function readStorage(page: Page, key: string): Promise<StoredNote[]
 /** Counts cache writes from the page's point of view, to prove drags don't persist per movement. */
 export async function installCacheWriteSpy(page: Page): Promise<void> {
   await page.addInitScript((key) => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- re-applied with the right `this` below
     const original = Storage.prototype.setItem;
     const w = window as unknown as { __cacheWrites: number };
     w.__cacheWrites = 0;

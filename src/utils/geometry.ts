@@ -10,8 +10,9 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export function pointInEdges(point: Point, edges: Edges): boolean {
-  return point.x >= edges.left && point.x <= edges.right && point.y >= edges.top && point.y <= edges.bottom;
+/** True when the two rectangles share any area; rectangles that merely touch do not overlap. */
+export function rectsOverlap(a: Edges, b: Edges): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
 /** Keeps a note of the given size fully inside the bounds. */

@@ -1,7 +1,7 @@
 import { memo, type RefObject } from 'react';
 
 interface TrashZoneProps {
-  readonly innerRef: RefObject<HTMLDivElement>;
+  readonly innerRef: RefObject<HTMLDivElement | null>;
 }
 
 /** Drop target for deleting notes. Its highlight is toggled by the dragged note through the ref. */

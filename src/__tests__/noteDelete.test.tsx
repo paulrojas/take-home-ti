@@ -6,7 +6,7 @@ import { createMockNotesApi } from '../services/notesApi';
 import { createLocalNotesCache } from '../services/persistence';
 import { SyncController } from '../services/syncController';
 import { AppProvider } from '../store/AppContext';
-import { NotesStore } from '../store/notesStore';
+import { createNotesStore, selectAllNotes, type NotesStore } from '../store/notesStore';
 import type { NoteId } from '../types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -23,7 +23,7 @@ let storage: Map<string, string>;
 function render(): void {
   const sync = new SyncController(store, createMockNotesApi(null), cache);
   // start() hydrates from the cache, so seed it with the note under test.
-  cache.save(store.getAll());
+  cache.save(selectAllNotes(store.getState()));
   sync.start();
   act(() => {
     root.render(
@@ -35,9 +35,6 @@ function render(): void {
 }
 
 const deleteButton = (): HTMLButtonElement => container.querySelector<HTMLButtonElement>('[aria-label="Delete note"]')!;
-const dialog = (): HTMLElement | null => container.querySelector('[role="alertdialog"]');
-const confirmButton = (): HTMLButtonElement => container.querySelector<HTMLButtonElement>('.confirm-button--danger')!;
-const cancelButton = (): HTMLButtonElement => container.querySelector<HTMLButtonElement>('.confirm-button:not(.confirm-button--danger)')!;
 const click = (el: HTMLElement): void => void act(() => el.click());
 
 function type(text: string): void {
@@ -52,8 +49,8 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  store = new NotesStore();
-  id = store.create(rect);
+  store = createNotesStore();
+  id = store.getState().create(rect);
   storage = new Map();
   cache = createLocalNotesCache('k', {
     getItem: (key) => storage.get(key) ?? null,
@@ -68,126 +65,53 @@ afterEach(() => {
 });
 
 describe('Note delete button', () => {
-  it('removes an empty note without asking', () => {
+  it('removes an empty note at once', () => {
     render();
     click(deleteButton());
-    expect(store.getNote(id)).toBeUndefined();
+    expect(store.getState().notes[id]).toBeUndefined();
   });
 
-  it('Backspace on a focused empty note deletes it immediately', () => {
-    render();
-    const note = container.querySelector<HTMLElement>('.note')!;
-    act(() => {
-      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
-    });
-    expect(store.getNote(id)).toBeUndefined();
-  });
-
-  it('treats whitespace-only text as empty', () => {
-    render();
-    type('   \n ');
-    click(deleteButton());
-    expect(store.getNote(id)).toBeUndefined();
-  });
-
-  it('asks for confirmation when the note has text, and keeps it until confirmed', () => {
+  it('removes a note with text at once, without asking, and keeps it undoable', () => {
     render();
     type('keep me');
     click(deleteButton());
 
-    expect(dialog()).not.toBeNull();
-    expect(store.getNote(id)).toBeDefined();
-
-    click(confirmButton());
-    expect(store.getNote(id)).toBeUndefined();
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(store.getState().notes[id]).toBeUndefined();
+    act(() => store.getState().undoRemove());
+    expect(store.getState().notes[id]?.text).toBe('keep me');
   });
 
-  it('asks even when the latest text is still waiting on the debounce', () => {
+  it('undo restores text that was still waiting on the debounce', () => {
     vi.useFakeTimers();
     render();
     type('unsaved');
-    expect(store.getNote(id)!.text).toBe('');
+    expect(store.getState().notes[id]!.text).toBe('');
+
     click(deleteButton());
-    expect(dialog()).not.toBeNull();
+    act(() => store.getState().undoRemove());
+
+    expect(store.getState().notes[id]!.text).toBe('unsaved');
   });
+});
 
-  it('cancel keeps the note and its text and closes the dialog', () => {
-    render();
-    type('keep me');
-    click(deleteButton());
-    click(cancelButton());
-
-    expect(dialog()).toBeNull();
-    expect(store.getNote(id)).toBeDefined();
-    expect(container.querySelector('textarea')!.value).toBe('keep me');
-  });
-
-  it('makes the content behind the dialog inert and the dialog modal, then restores it', () => {
-    render();
-    type('keep me');
-    click(deleteButton());
-
-    expect(dialog()!.getAttribute('aria-modal')).toBe('true');
-    expect(dialog()!.getAttribute('aria-describedby')).toBe(dialog()!.querySelector('p')!.id);
-    expect(container.querySelector<HTMLElement>('.note__text')!.inert).toBe(true);
-    expect(container.querySelector<HTMLElement>('.note__header')!.inert).toBe(true);
-
-    click(cancelButton());
-    expect(container.querySelector<HTMLElement>('.note__text')!.inert).toBe(false);
-    expect(container.querySelector<HTMLElement>('.note__header')!.inert).toBe(false);
-  });
-
-  it('ignores the Delete key while the dialog is open', () => {
-    render();
-    type('keep me');
-    act(() => deleteButton().focus());
-    click(deleteButton());
-    const note = container.querySelector<HTMLElement>('.note')!;
-    act(() => note.focus());
-    act(() => {
-      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
-    });
-    act(() => {
-      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+describe('Note Delete key', () => {
+  const press = (target: Element, key: string): void =>
+    void act(() => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
     });
 
-    // Focus still goes back to the original trigger, not to the note root the Delete key was sent to.
-    expect(document.activeElement).toBe(deleteButton());
+  it('Delete and Backspace on the focused note remove it', () => {
+    render();
+    press(container.querySelector('.note')!, 'Delete');
+    expect(store.getState().notes[id]).toBeUndefined();
   });
 
-  it('focuses Cancel by default so Enter cannot delete', () => {
+  it('is ignored while typing in the textarea', () => {
     render();
     type('keep me');
-    click(deleteButton());
-    expect(document.activeElement).toBe(cancelButton());
-  });
-
-  it('Escape closes the dialog without deleting, even when focus is not inside it', () => {
-    render();
-    type('keep me');
-    click(deleteButton());
-    const note = container.querySelector<HTMLElement>('.note')!;
-    // Clicking the dialog backdrop moves focus to the note root, outside the dialog's own subtree.
-    act(() => note.focus());
-    act(() => {
-      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-
-    expect(dialog()).toBeNull();
-    expect(store.getNote(id)).toBeDefined();
-  });
-
-  it('returns focus to the element that had it before the dialog opened', () => {
-    render();
-    type('keep me');
-    act(() => deleteButton().focus());
-    click(deleteButton());
-    expect(document.activeElement).toBe(cancelButton());
-
-    act(() => {
-      cancelButton().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-    expect(document.activeElement).toBe(deleteButton());
+    press(container.querySelector('textarea')!, 'Backspace');
+    expect(store.getState().notes[id]).toBeDefined();
   });
 });
 
@@ -196,38 +120,13 @@ describe('Note unload', () => {
     vi.useFakeTimers();
     render();
     type('typed just before closing');
-    expect(store.getNote(id)!.text).toBe('');
+    expect(store.getState().notes[id]!.text).toBe('');
 
     act(() => {
       window.dispatchEvent(new Event('pagehide'));
     });
 
-    expect(store.getNote(id)!.text).toBe('typed just before closing');
+    expect(store.getState().notes[id]!.text).toBe('typed just before closing');
     expect(cache.load()[0]?.text).toBe('typed just before closing');
-  });
-});
-
-describe('Note Delete key', () => {
-  it('goes through the same confirmation when the note is focused', () => {
-    render();
-    type('keep me');
-    const note = container.querySelector<HTMLElement>('.note')!;
-    act(() => {
-      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
-    });
-
-    expect(dialog()).not.toBeNull();
-    expect(store.getNote(id)).toBeDefined();
-  });
-
-  it('is ignored while typing in the textarea', () => {
-    render();
-    type('keep me');
-    act(() => {
-      container.querySelector('textarea')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
-    });
-
-    expect(dialog()).toBeNull();
-    expect(store.getNote(id)).toBeDefined();
   });
 });

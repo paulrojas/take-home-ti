@@ -1,8 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { MIN_VIEWPORT, box, openApp, setViewport } from './support/app';
 import { addNote, board, dragHeaderBy, note, notes, settledBox } from './support/notes';
 
-const warning = (page: import('@playwright/test').Page) => page.getByRole('alertdialog').filter({ hasText: 'Your window is too small' });
+const warning = (page: Page) => page.getByRole('alertdialog').filter({ hasText: 'Your window is too small' });
 
 test.beforeEach(async ({ page }) => {
   await openApp(page);

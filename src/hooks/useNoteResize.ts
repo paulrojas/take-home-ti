@@ -7,8 +7,8 @@ import { beginPointerDrag } from '../utils/pointerDrag';
 /** Corner-grip resize for one note: size is written through the ref while dragging, committed on release. */
 export function useNoteResize(
   id: NoteId,
-  noteRef: RefObject<HTMLElement>,
-  boardRef: RefObject<HTMLElement>,
+  noteRef: RefObject<HTMLElement | null>,
+  boardRef: RefObject<HTMLElement | null>,
 ): (event: PointerEvent<HTMLElement>) => void {
   const store = useStore();
 
@@ -16,7 +16,8 @@ export function useNoteResize(
     (event) => {
       const el = noteRef.current;
       const board = boardRef.current;
-      const start = store.getNote(id);
+      const { notes, update } = store.getState();
+      const start = notes[id];
       if (!el || !board || !start || event.button !== 0) return;
 
       const bounds = { width: board.clientWidth, height: board.clientHeight };
@@ -38,7 +39,7 @@ export function useNoteResize(
           el.classList.remove('note--resizing');
           const final = cancelled ? start : size;
           apply(final);
-          store.update(id, { width: final.width, height: final.height });
+          update(id, { width: final.width, height: final.height });
         },
       });
     },

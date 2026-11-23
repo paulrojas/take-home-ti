@@ -1,97 +1,148 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NotesStore } from '../store/notesStore';
+import { UNDO_LIMIT, createNotesStore, selectAllNotes } from '../store/notesStore';
 
 const rect = { x: 10, y: 10, width: 200, height: 200 };
 
-describe('NotesStore', () => {
-  it('creates notes with increasing z and notifies id listeners', () => {
-    const store = new NotesStore();
-    const onIds = vi.fn();
-    store.subscribeIds(onIds);
+describe('notes store', () => {
+  it('creates notes with increasing z and a new id list', () => {
+    const store = createNotesStore();
+    const before = store.getState().ids;
 
-    const a = store.create(rect);
-    const b = store.create(rect);
+    const a = store.getState().create(rect);
+    const b = store.getState().create(rect);
 
-    expect(store.getIds()).toEqual([a, b]);
-    expect(store.getNote(b)!.z).toBeGreaterThan(store.getNote(a)!.z);
-    expect(onIds).toHaveBeenCalledTimes(2);
+    const { ids, notes } = store.getState();
+    expect(ids).toEqual([a, b]);
+    expect(ids).not.toBe(before);
+    expect(notes[b]!.z).toBeGreaterThan(notes[a]!.z);
   });
 
-  it('only notifies the listener of the updated note, not the id list', () => {
-    const store = new NotesStore();
-    const a = store.create(rect);
-    const b = store.create(rect);
-    const onA = vi.fn();
-    const onB = vi.fn();
-    const onIds = vi.fn();
-    store.subscribeNote(a, onA);
-    store.subscribeNote(b, onB);
-    store.subscribeIds(onIds);
+  it('keeps the id list identity while a note is edited, and replaces only that record', () => {
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
+    const b = store.getState().create(rect);
+    const { ids, notes } = store.getState();
 
-    store.update(a, { text: 'hello' });
+    store.getState().update(a, { text: 'hello' });
 
-    expect(onA).toHaveBeenCalledTimes(1);
-    expect(onB).not.toHaveBeenCalled();
-    expect(onIds).not.toHaveBeenCalled();
+    expect(store.getState().ids).toBe(ids);
+    expect(store.getState().notes[a]).not.toBe(notes[a]);
+    expect(store.getState().notes[b]).toBe(notes[b]);
   });
 
   it('skips no-op updates', () => {
-    const store = new NotesStore();
-    const a = store.create(rect);
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
     const onChange = vi.fn();
-    store.subscribeChanges(onChange);
-    const version = store.getVersion();
+    store.subscribe(onChange);
 
-    store.update(a, { x: rect.x });
+    store.getState().update(a, { x: rect.x });
 
     expect(onChange).not.toHaveBeenCalled();
-    expect(store.getVersion()).toBe(version);
   });
 
   it('removes notes and updates ids', () => {
-    const store = new NotesStore();
-    const a = store.create(rect);
-    const b = store.create(rect);
-    store.remove(a);
-    expect(store.getIds()).toEqual([b]);
-    expect(store.getNote(a)).toBeUndefined();
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
+    const b = store.getState().create(rect);
+    store.getState().remove(a);
+    expect(store.getState().ids).toEqual([b]);
+    expect(store.getState().notes[a]).toBeUndefined();
   });
 
   it('brings a note to front only when it is not already on top', () => {
-    const store = new NotesStore();
-    const a = store.create(rect);
-    const b = store.create(rect);
-    const onB = vi.fn();
-    store.subscribeNote(b, onB);
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
+    const b = store.getState().create(rect);
+    const onChange = vi.fn();
+    store.subscribe(onChange);
 
-    store.bringToFront(b);
-    expect(onB).not.toHaveBeenCalled();
+    store.getState().bringToFront(b);
+    expect(onChange).not.toHaveBeenCalled();
 
-    store.bringToFront(a);
-    expect(store.getNote(a)!.z).toBeGreaterThan(store.getNote(b)!.z);
+    store.getState().bringToFront(a);
+    expect(store.getState().notes[a]!.z).toBeGreaterThan(store.getState().notes[b]!.z);
   });
 
   it('continues z ordering after replaceAll', () => {
-    const source = new NotesStore();
-    const a = source.create(rect);
-    source.bringToFront(a);
-    const store = new NotesStore();
-    store.replaceAll(source.getAll());
-    const b = store.create(rect);
-    expect(store.getNote(b)!.z).toBeGreaterThan(store.getNote(a)!.z);
+    const source = createNotesStore();
+    const a = source.getState().create(rect);
+    source.getState().bringToFront(a);
+    const store = createNotesStore();
+    store.getState().replaceAll(selectAllNotes(source.getState()));
+    const b = store.getState().create(rect);
+    expect(store.getState().notes[b]!.z).toBeGreaterThan(store.getState().notes[a]!.z);
   });
 
   it('constrainTo pulls oversized and out-of-bounds notes back in and leaves fitting ones alone', () => {
-    const store = new NotesStore();
-    const fits = store.create({ x: 10, y: 10, width: 200, height: 200 });
-    const outside = store.create({ x: 900, y: 500, width: 300, height: 300 });
-    const onFits = vi.fn();
-    store.subscribeNote(fits, onFits);
+    const store = createNotesStore();
+    const fits = store.getState().create({ x: 10, y: 10, width: 200, height: 200 });
+    const outside = store.getState().create({ x: 900, y: 500, width: 300, height: 300 });
+    const fitsBefore = store.getState().notes[fits];
 
-    store.constrainTo({ width: 800, height: 600 });
+    store.getState().constrainTo({ width: 800, height: 600 });
 
-    expect(store.getNote(fits)).toMatchObject({ x: 10, y: 10, width: 200, height: 200 });
-    expect(onFits).not.toHaveBeenCalled();
-    expect(store.getNote(outside)).toMatchObject({ x: 500, y: 300, width: 300, height: 300 });
+    expect(store.getState().notes[fits]).toBe(fitsBefore);
+    expect(store.getState().notes[outside]).toMatchObject({ x: 500, y: 300, width: 300, height: 300 });
+  });
+});
+
+describe('undoing a deletion', () => {
+  it('restores the exact record, including text, colour and stacking', () => {
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
+    store.getState().update(a, { text: 'keep me', color: 'pink' });
+    store.getState().create(rect);
+    const original = store.getState().notes[a];
+
+    store.getState().remove(a);
+    store.getState().undoRemove();
+
+    expect(store.getState().notes[a]).toEqual(original);
+    expect(store.getState().ids).toContain(a);
+    expect(store.getState().removed).toHaveLength(0);
+  });
+
+  it('undoes several deletions, most recent first', () => {
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
+    const b = store.getState().create(rect);
+    store.getState().remove(a);
+    store.getState().remove(b);
+
+    store.getState().undoRemove();
+    expect(store.getState().ids).toEqual([b]);
+    store.getState().undoRemove();
+    expect(store.getState().ids).toEqual([b, a]);
+  });
+
+  it('is a no-op with nothing to undo', () => {
+    const store = createNotesStore();
+    const onChange = vi.fn();
+    store.subscribe(onChange);
+    store.getState().undoRemove();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('never ties stacking with a note created after the deletion', () => {
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
+    store.getState().remove(a);
+    const b = store.getState().create(rect);
+    store.getState().undoRemove();
+    expect(store.getState().notes[b]!.z).toBeGreaterThan(store.getState().notes[a]!.z);
+  });
+
+  it('keeps only the most recent deletions', () => {
+    const store = createNotesStore();
+    for (let i = 0; i < UNDO_LIMIT + 5; i += 1) store.getState().remove(store.getState().create(rect));
+    expect(store.getState().removed).toHaveLength(UNDO_LIMIT);
+  });
+
+  it('forgets the history when notes are replaced from storage', () => {
+    const store = createNotesStore();
+    store.getState().remove(store.getState().create(rect));
+    store.getState().replaceAll([]);
+    expect(store.getState().removed).toHaveLength(0);
   });
 });

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openApp } from './support/app';
+import { box, openApp } from './support/app';
 import { addNote, center, dragFromTo, headerGrabPoint, note, notes, textArea, trash } from './support/notes';
 
 test.beforeEach(async ({ page }) => {
@@ -54,6 +54,37 @@ test.describe('drag to trash', () => {
     await expect(trash(page)).not.toHaveClass(/trash--active/);
   });
 
+  test('deletes when the card covers the trash even though the pointer stays outside it', async ({ page }) => {
+    const card = await box(note(page));
+    const zone = await box(trash(page));
+    const grab = await headerGrabPoint(note(page));
+    // Move the card so only its bottom-right corner (20px) enters the trash zone.
+    const dx = zone.x + 20 - (card.x + card.width);
+    const dy = zone.y + 20 - (card.y + card.height);
+    const end = { x: grab.x + dx, y: grab.y + dy };
+    expect(end.x < zone.x || end.y < zone.y).toBe(true);
+
+    await page.mouse.move(grab.x, grab.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, { steps: 8 });
+    await expect(trash(page)).toHaveClass(/trash--active/);
+    await page.mouse.up();
+
+    await expect(notes(page)).toHaveCount(0);
+  });
+
+  test('a card that only brushes past the trash edge is kept', async ({ page }) => {
+    const card = await box(note(page));
+    const zone = await box(trash(page));
+    const grab = await headerGrabPoint(note(page));
+    const dx = zone.x - 10 - (card.x + card.width);
+    const dy = zone.y - 10 - (card.y + card.height);
+
+    await dragFromTo(page, grab, { x: grab.x + dx, y: grab.y + dy });
+
+    await expect(notes(page)).toHaveCount(1);
+  });
+
   test('only the dragged note is deleted', async ({ page }) => {
     await addNote(page);
     await startDragToTrash(page);
@@ -63,72 +94,105 @@ test.describe('drag to trash', () => {
   });
 });
 
+const deleteButton = (page: Page) => note(page).getByRole('button', { name: 'Delete note' });
+const toast = (page: Page) => page.locator('.toast');
+
 test.describe('delete button', () => {
   test('removes an empty note immediately', async ({ page }) => {
-    await note(page).getByRole('button', { name: 'Delete note' }).click();
+    await deleteButton(page).click();
     await expect(notes(page)).toHaveCount(0);
   });
 
-  test('asks first when the note has text; Cancel keeps it with its text', async ({ page }) => {
+  test('removes a note with text immediately, without a blocking dialog', async ({ page }) => {
     await textArea(note(page)).fill('keep me');
-    await note(page).getByRole('button', { name: 'Delete note' }).click();
+    await deleteButton(page).click();
 
-    const dialog = page.getByRole('alertdialog').filter({ hasText: 'Delete this note?' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await expect(notes(page)).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  });
+});
 
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(dialog).toBeHidden();
+test.describe('undo', () => {
+  test('the toast Undo button brings the note back with its text, place and colour', async ({ page }) => {
+    await textArea(note(page)).fill('keep me');
+    const before = await box(note(page));
+    await deleteButton(page).click();
+    await expect(toast(page)).toContainText('Note deleted');
+
+    await toast(page).getByRole('button', { name: 'Undo' }).click();
+
     await expect(notes(page)).toHaveCount(1);
     await expect(textArea(note(page))).toHaveValue('keep me');
+    expect(await box(note(page))).toEqual(before);
+    await expect(toast(page)).toHaveCount(0);
   });
 
-  test('Delete confirms and removes the note', async ({ page }) => {
-    await textArea(note(page)).fill('bye');
-    await note(page).getByRole('button', { name: 'Delete note' }).click();
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
-
+  test('restores a note deleted by dragging it to the trash', async ({ page }) => {
+    await startDragToTrash(page);
+    await page.mouse.up();
     await expect(notes(page)).toHaveCount(0);
-  });
 
-  test('Escape closes the dialog without deleting and focus returns to the delete button', async ({ page }) => {
-    await textArea(note(page)).fill('keep me');
-    const deleteButton = note(page).getByRole('button', { name: 'Delete note' });
-    await deleteButton.focus();
-    await deleteButton.press('Enter');
-    await expect(page.getByText('Delete this note?')).toBeVisible();
-
-    await page.keyboard.press('Escape');
-    await expect(page.getByText('Delete this note?')).toBeHidden();
+    await toast(page).getByRole('button', { name: 'Undo' }).click();
     await expect(notes(page)).toHaveCount(1);
-    await expect(deleteButton).toBeFocused();
   });
 
-  test('Tab cannot reach the textarea behind the dialog', async ({ page }) => {
-    await textArea(note(page)).fill('keep me');
-    await note(page).getByRole('button', { name: 'Delete note' }).click();
+  test('Ctrl/Cmd+Z undoes deletions one by one, most recent first', async ({ page }) => {
+    await addNote(page);
+    await textArea(note(page, 0)).fill('first');
+    await textArea(note(page, 1)).fill('second');
+    await note(page, 1).getByRole('button', { name: 'Delete note' }).click();
+    await note(page, 0).getByRole('button', { name: 'Delete note' }).click();
+    await expect(notes(page)).toHaveCount(0);
 
-    for (let i = 0; i < 6; i += 1) {
-      await page.keyboard.press('Tab');
-      await expect(textArea(note(page))).not.toBeFocused();
-    }
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(notes(page)).toHaveCount(1);
+    await expect(textArea(note(page))).toHaveValue('first');
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(notes(page)).toHaveCount(2);
+  });
+
+  test('Ctrl/Cmd+Z while typing is left to the text field', async ({ page }) => {
+    await addNote(page);
+    await note(page, 1).getByRole('button', { name: 'Delete note' }).click();
+    await expect(notes(page)).toHaveCount(1);
+
+    await textArea(note(page)).fill('typing');
+    await page.keyboard.press('ControlOrMeta+z');
+
+    await expect(notes(page)).toHaveCount(1);
+  });
+
+  test('the toast fades after a few seconds but Ctrl/Cmd+Z still works', async ({ page }) => {
+    await deleteButton(page).click();
+    await expect(toast(page)).toBeVisible();
+    await expect(toast(page)).toHaveCount(0, { timeout: 10_000 });
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(notes(page)).toHaveCount(1);
+  });
+
+  test('a deletion survives a reload as a deletion (history is not persisted)', async ({ page }) => {
+    await deleteButton(page).click();
+    await expect(notes(page)).toHaveCount(0);
+    await expect(page.getByText('All changes saved')).toBeVisible();
+
+    await page.reload();
+    await expect(notes(page)).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(notes(page)).toHaveCount(0);
   });
 });
 
 test.describe('Delete key', () => {
-  test('on a focused empty note deletes it', async ({ page }) => {
-    await note(page).focus();
-    await page.keyboard.press('Delete');
-    await expect(notes(page)).toHaveCount(0);
-  });
-
-  test('on a focused note with text opens the confirmation', async ({ page }) => {
+  test('on a focused note deletes it, and it can be undone', async ({ page }) => {
     await textArea(note(page)).fill('keep me');
     await note(page).focus();
     await page.keyboard.press('Delete');
+    await expect(notes(page)).toHaveCount(0);
 
-    await expect(page.getByText('Delete this note?')).toBeVisible();
-    await expect(notes(page)).toHaveCount(1);
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(textArea(note(page))).toHaveValue('keep me');
   });
 
   test('is ignored while typing in the textarea', async ({ page }) => {
@@ -137,6 +201,5 @@ test.describe('Delete key', () => {
     await page.keyboard.press('Delete');
 
     await expect(notes(page)).toHaveCount(1);
-    await expect(page.getByText('Delete this note?')).toBeHidden();
   });
 });

@@ -5,7 +5,7 @@ import { createMockNotesApi } from './services/notesApi';
 import { createLocalNotesCache } from './services/persistence';
 import { SyncController } from './services/syncController';
 import { AppProvider } from './store/AppContext';
-import { NotesStore } from './store/notesStore';
+import { createNotesStore } from './store/notesStore';
 import './styles/app.css';
 
 function getStorage(): Storage | null {
@@ -17,7 +17,7 @@ function getStorage(): Storage | null {
 }
 
 const storage = getStorage();
-const store = new NotesStore();
+const store = createNotesStore();
 const sync = new SyncController(store, createMockNotesApi(storage), createLocalNotesCache('sticky-notes:cache', storage));
 sync.start();
 
