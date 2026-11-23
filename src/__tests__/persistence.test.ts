@@ -25,6 +25,11 @@ describe('persistence', () => {
     expect(deserializeNotes(null)).toEqual([]);
   });
 
+  it('keeps one note per id and rejects an id that would hit the object prototype', () => {
+    const newer = { ...note, text: 'newer' };
+    expect(parseNotes([note, newer, { ...note, id: '__proto__' }])).toEqual([newer]);
+  });
+
   it('cache survives missing or failing storage', () => {
     expect(createLocalNotesCache('k', null).load()).toEqual([]);
     const throwing = {

@@ -1,5 +1,5 @@
 import { useStore as useZustandStore } from 'zustand';
-import type { Note, NoteId } from '../types';
+import type { NoteId } from '../types';
 import { useStore } from './AppContext';
 import type { NotesState } from './notesStore';
 
@@ -9,5 +9,3 @@ export function useNotes<T>(selector: (state: NotesState) => T): T {
 }
 
 export const selectIds = (state: NotesState): readonly NoteId[] => state.ids;
-
-export const selectLastRemoved = (state: NotesState): Note | undefined => state.removed[state.removed.length - 1];

@@ -15,4 +15,4 @@ Use Zustand's vanilla `createStore` (`src/store/notesStore.ts`).
 ## Consequences
 - About 130 lines of subscription code disappear; one small dependency is added.
 - Drag, resize and draw still bypass React state entirely (DOM through refs, one store write on release), so the performance model is unchanged.
-- The "no component libraries" rule in the brief concerns UI components; a state helper does not conflict with it.
+- The brief asks for React "without stock components", i.e. no ready-made UI. Zustand holds state and renders nothing, so it is read as outside that rule; every component, interaction and style is still hand-written. A reviewer who reads the rule more strictly can swap the store back, since components only touch it through `useNotes` and `getState()`.

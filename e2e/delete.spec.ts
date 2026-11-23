@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { box, openApp } from './support/app';
-import { addNote, center, dragFromTo, headerGrabPoint, note, notes, textArea, trash } from './support/notes';
+import { box, openApp, within } from './support/app';
+import { addNote, center, dragFromTo, drawNote, headerGrabPoint, note, notes, settledBox, textArea, trash } from './support/notes';
 
 test.beforeEach(async ({ page }) => {
   await openApp(page);
@@ -85,6 +85,26 @@ test.describe('drag to trash', () => {
     await expect(notes(page)).toHaveCount(1);
   });
 
+  test('a note drawn over the trash is not deleted by clicking it, only after it leaves and returns', async ({ page }) => {
+    await note(page).getByRole('button', { name: 'Delete note' }).click();
+    const zone = await box(trash(page));
+    await drawNote(page, { x: zone.x - 60, y: zone.y - 60 }, { x: zone.x + zone.width - 5, y: zone.y + zone.height - 5 });
+    await expect(notes(page)).toHaveCount(1);
+
+    const grab = await headerGrabPoint(note(page));
+    await page.mouse.click(grab.x, grab.y);
+    await expect(notes(page)).toHaveCount(1);
+
+    await page.mouse.move(grab.x, grab.y);
+    await page.mouse.down();
+    await page.mouse.move(grab.x - 400, grab.y - 200, { steps: 8 });
+    await expect(trash(page)).not.toHaveClass(/trash--active/);
+    await page.mouse.move(grab.x, grab.y, { steps: 8 });
+    await expect(trash(page)).toHaveClass(/trash--active/);
+    await page.mouse.up();
+    await expect(notes(page)).toHaveCount(0);
+  });
+
   test('only the dragged note is deleted', async ({ page }) => {
     await addNote(page);
     await startDragToTrash(page);
@@ -95,7 +115,8 @@ test.describe('drag to trash', () => {
 });
 
 const deleteButton = (page: Page) => note(page).getByRole('button', { name: 'Delete note' });
-const toast = (page: Page) => page.locator('.toast');
+const toastRegion = (page: Page) => page.getByRole('status', { name: 'Notifications' });
+const undoButton = (page: Page) => toastRegion(page).getByRole('button', { name: 'Undo' });
 
 test.describe('delete button', () => {
   test('removes an empty note immediately', async ({ page }) => {
@@ -117,14 +138,18 @@ test.describe('undo', () => {
     await textArea(note(page)).fill('keep me');
     const before = await box(note(page));
     await deleteButton(page).click();
-    await expect(toast(page)).toContainText('Note deleted');
+    await expect(toastRegion(page)).toContainText('Note deleted');
 
-    await toast(page).getByRole('button', { name: 'Undo' }).click();
+    await undoButton(page).click();
 
     await expect(notes(page)).toHaveCount(1);
     await expect(textArea(note(page))).toHaveValue('keep me');
-    expect(await box(note(page))).toEqual(before);
-    await expect(toast(page)).toHaveCount(0);
+    const after = await settledBox(note(page));
+    within(after.x, before.x);
+    within(after.y, before.y);
+    within(after.width, before.width);
+    within(after.height, before.height);
+    await expect(toastRegion(page)).toBeEmpty();
   });
 
   test('restores a note deleted by dragging it to the trash', async ({ page }) => {
@@ -132,7 +157,7 @@ test.describe('undo', () => {
     await page.mouse.up();
     await expect(notes(page)).toHaveCount(0);
 
-    await toast(page).getByRole('button', { name: 'Undo' }).click();
+    await undoButton(page).click();
     await expect(notes(page)).toHaveCount(1);
   });
 
@@ -165,8 +190,8 @@ test.describe('undo', () => {
 
   test('the toast fades after a few seconds but Ctrl/Cmd+Z still works', async ({ page }) => {
     await deleteButton(page).click();
-    await expect(toast(page)).toBeVisible();
-    await expect(toast(page)).toHaveCount(0, { timeout: 10_000 });
+    await expect(toastRegion(page)).toContainText('Note deleted');
+    await expect(toastRegion(page)).toBeEmpty({ timeout: 10_000 });
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect(notes(page)).toHaveCount(1);

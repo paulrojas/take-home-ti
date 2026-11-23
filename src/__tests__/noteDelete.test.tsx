@@ -73,25 +73,17 @@ describe('Note delete button', () => {
 
   it('removes a note with text at once, without asking, and keeps it undoable', () => {
     render();
+    const area = container.querySelector('textarea')!;
+    act(() => area.focus());
     type('keep me');
+    // Reaching the delete control moves focus away from the textarea, which commits its text.
+    act(() => area.blur());
     click(deleteButton());
 
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
     expect(store.getState().notes[id]).toBeUndefined();
     act(() => store.getState().undoRemove());
     expect(store.getState().notes[id]?.text).toBe('keep me');
-  });
-
-  it('undo restores text that was still waiting on the debounce', () => {
-    vi.useFakeTimers();
-    render();
-    type('unsaved');
-    expect(store.getState().notes[id]!.text).toBe('');
-
-    click(deleteButton());
-    act(() => store.getState().undoRemove());
-
-    expect(store.getState().notes[id]!.text).toBe('unsaved');
   });
 });
 

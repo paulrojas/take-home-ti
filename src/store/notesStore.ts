@@ -5,19 +5,25 @@ import { clampPosition, clampSize } from '../utils/geometry';
 /** How many deletions can be undone. */
 export const UNDO_LIMIT = 20;
 
+/** A deleted note and the position in `ids` it came from, so undo puts it back in place. */
+export interface RemovedNote {
+  readonly note: Note;
+  readonly index: number;
+}
+
 export interface NotesState {
   /** Immutable records; every change replaces the one note and the map. */
   readonly notes: Readonly<Record<NoteId, Note>>;
   /** Creation order. Its identity changes only when notes are added or removed. */
   readonly ids: readonly NoteId[];
   /** Deleted notes, most recent last. Memory only: never persisted. */
-  readonly removed: readonly Note[];
+  readonly removed: readonly RemovedNote[];
   /** Counts deletions, so the UI can tell a new deletion from an undo. */
   readonly removals: number;
   readonly create: (rect: Rect, color?: NoteColor) => NoteId;
   readonly update: (id: NoteId, changes: NoteChanges) => void;
   readonly remove: (id: NoteId) => void;
-  /** Restores the most recently deleted note with its original id, content and stacking. */
+  /** Restores the most recently deleted note with its original id, content, stacking and place in the order. */
   readonly undoRemove: () => void;
   readonly bringToFront: (id: NoteId) => void;
   /** Pulls notes that no longer fit (e.g. after the window shrank) back inside the bounds. */
@@ -32,6 +38,15 @@ function indexById(notes: readonly Note[]): Record<NoteId, Note> {
   const index: Record<NoteId, Note> = {};
   notes.forEach((note) => (index[note.id] = note));
   return index;
+}
+
+/** Returns the same object when the note already fits, so unchanged notes keep their identity. */
+function fitNote(note: Note, bounds: Size): Note {
+  const size = clampSize(note.width, note.height, { x: 0, y: 0 }, bounds);
+  const position = clampPosition(note.x, note.y, size, bounds);
+  const unchanged =
+    position.x === note.x && position.y === note.y && size.width === note.width && size.height === note.height;
+  return unchanged ? note : { ...note, ...position, ...size };
 }
 
 function highestZ(notes: readonly Note[]): number {
@@ -75,12 +90,13 @@ export function createNotesStore(initial: readonly Note[] = []): NotesStore {
     remove(id) {
       const note = get().notes[id];
       if (!note) return;
+      const index = get().ids.indexOf(id);
       set((state) => {
         const { [id]: _removed, ...notes } = state.notes;
         return {
           notes,
           ids: state.ids.filter((existing) => existing !== id),
-          removed: [...state.removed, note].slice(-UNDO_LIMIT),
+          removed: [...state.removed, { note, index }].slice(-UNDO_LIMIT),
           removals: state.removals + 1,
         };
       });
@@ -88,11 +104,12 @@ export function createNotesStore(initial: readonly Note[] = []): NotesStore {
 
     undoRemove() {
       const { removed } = get();
-      const note = removed[removed.length - 1];
-      if (!note) return;
+      const last = removed[removed.length - 1];
+      if (!last) return;
+      const { note, index } = last;
       set((state) => ({
         notes: { ...state.notes, [note.id]: note },
-        ids: [...state.ids, note.id],
+        ids: [...state.ids.slice(0, index), note.id, ...state.ids.slice(index)],
         removed: removed.slice(0, -1),
       }));
     },
@@ -104,13 +121,23 @@ export function createNotesStore(initial: readonly Note[] = []): NotesStore {
     },
 
     constrainTo(bounds) {
-      const { notes, ids, update } = get();
-      ids.forEach((id) => {
-        const note = notes[id];
-        if (!note) return;
-        const size = clampSize(note.width, note.height, { x: 0, y: 0 }, bounds);
-        update(id, { ...clampPosition(note.x, note.y, size, bounds), ...size });
+      const { notes, removed } = get();
+      // One update for the whole board, so a shrinking window causes a single notification and save.
+      // Deleted notes are fitted too, so an undo never brings one back outside the board.
+      const fitted: Record<NoteId, Note> = {};
+      let changed = false;
+      Object.values(notes).forEach((note) => {
+        const next = fitNote(note, bounds);
+        if (next !== note) changed = true;
+        fitted[note.id] = next;
       });
+      const fittedRemoved = removed.map((entry) => {
+        const next = fitNote(entry.note, bounds);
+        if (next === entry.note) return entry;
+        changed = true;
+        return { ...entry, note: next };
+      });
+      if (changed) set({ notes: fitted, removed: fittedRemoved });
     },
 
     replaceAll(next) {

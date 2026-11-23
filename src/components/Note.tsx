@@ -27,7 +27,7 @@ function NoteImpl({ id, boardRef, trashRef }: NoteProps) {
   const onHeaderPointerDown = useNoteDrag(id, noteRef, boardRef, trashRef);
   const onResizePointerDown = useNoteResize(id, noteRef, boardRef);
   const text = useNoteText(id, textRef, note?.text);
-  const removal = useNoteRemoval(id, textRef);
+  const removal = useNoteRemoval(id);
 
   const onPointerDown = useCallback(() => store.getState().bringToFront(id), [store, id]);
   const onPickColor = useCallback((color: NoteColor) => store.getState().update(id, { color }), [store, id]);

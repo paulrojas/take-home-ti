@@ -35,7 +35,16 @@ export function useNoteDrag(
       const trashEdges = trash.getBoundingClientRect();
       const boardEdges = board.getBoundingClientRect();
       let position = { x: start.x, y: start.y };
+      const cardEdges = (at: { x: number; y: number }) => ({
+        left: boardEdges.left + at.x,
+        top: boardEdges.top + at.y,
+        right: boardEdges.left + at.x + start.width,
+        bottom: boardEdges.top + at.y + start.height,
+      });
       let overTrash = false;
+      // A note that already covers the trash (drawn, resized or pushed there) is only a drop target once it
+      // has left the zone, so clicking or nudging it never deletes it.
+      let armed = !rectsOverlap(cardEdges(start), trashEdges);
 
       beginPointerDrag(event, {
         onStart() {
@@ -45,9 +54,9 @@ export function useNoteDrag(
           position = clampPosition(start.x + dx, start.y + dy, start, bounds);
           el.style.transform = translate(position.x, position.y);
           // The card, not the pointer, decides: a note covering the trash is dropped into it.
-          const left = boardEdges.left + position.x;
-          const top = boardEdges.top + position.y;
-          const over = rectsOverlap({ left, top, right: left + start.width, bottom: top + start.height }, trashEdges);
+          const touching = rectsOverlap(cardEdges(position), trashEdges);
+          if (!touching) armed = true;
+          const over = armed && touching;
           if (over !== overTrash) {
             overTrash = over;
             el.classList.toggle('note--doomed', over);

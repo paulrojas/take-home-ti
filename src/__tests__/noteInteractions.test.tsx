@@ -164,6 +164,38 @@ describe('deleting by dragging to the trash', () => {
     expect(store.getState().notes[id]).toBeUndefined();
   });
 
+  describe('a note that already covers the trash', () => {
+    beforeEach(() => {
+      act(() => store.getState().update(id, { x: 750, y: 400 }));
+    });
+
+    it('is not deleted by a plain click on its header', () => {
+      pointer(header(), 'pointerdown', 800, 410);
+      pointer(header(), 'pointerup', 800, 410);
+      expect(store.getState().notes[id]).toBeDefined();
+    });
+
+    it('is not deleted when nudged while still covering the trash', () => {
+      pointer(header(), 'pointerdown', 800, 410);
+      pointer(header(), 'pointermove', 810, 415);
+      frame();
+      expect(note().classList.contains('note--doomed')).toBe(false);
+      pointer(header(), 'pointerup', 810, 415);
+      expect(store.getState().notes[id]).toBeDefined();
+    });
+
+    it('is deleted once it has left the trash and is dropped back onto it', () => {
+      pointer(header(), 'pointerdown', 800, 410);
+      pointer(header(), 'pointermove', 300, 200);
+      frame();
+      pointer(header(), 'pointermove', 800, 410);
+      frame();
+      expect(note().classList.contains('note--doomed')).toBe(true);
+      pointer(header(), 'pointerup', 800, 410);
+      expect(store.getState().notes[id]).toBeUndefined();
+    });
+  });
+
   it('keeps the note when the card only touches the trash edge', () => {
     pointer(header(), 'pointerdown', 150, 110);
     // Note x 600-800 and y 250-450 meets the trash corner at exactly (800, 450).

@@ -1,4 +1,4 @@
-import { useCallback, type KeyboardEvent, type RefObject } from 'react';
+import { useCallback, type KeyboardEvent } from 'react';
 import { useStore } from '../store/AppContext';
 import type { NoteId } from '../types';
 
@@ -9,18 +9,15 @@ interface NoteRemoval {
 }
 
 /**
- * Removes a note at once; the deletion stays undoable. The textarea is the source of truth, so text still
- * waiting on its debounce is committed first and an undo brings back exactly what was on screen.
+ * Removes a note at once; the deletion stays undoable. Text still waiting on its debounce is already committed:
+ * reaching any delete control blurs the textarea, which flushes it.
  */
-export function useNoteRemoval(id: NoteId, textRef: RefObject<HTMLTextAreaElement | null>): NoteRemoval {
+export function useNoteRemoval(id: NoteId): NoteRemoval {
   const store = useStore();
 
   const remove = useCallback(() => {
-    const { update, remove: removeNote } = store.getState();
-    const text = textRef.current?.value;
-    if (text !== undefined) update(id, { text });
-    removeNote(id);
-  }, [store, id, textRef]);
+    store.getState().remove(id);
+  }, [store, id]);
 
   const onNoteKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {

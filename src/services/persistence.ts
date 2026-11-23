@@ -21,6 +21,8 @@ function parseNote(value: unknown): Note | null {
   if (
     typeof id !== 'string' ||
     id === '' ||
+    // Notes are indexed by id in a plain object, so this key would hit the prototype instead.
+    id === '__proto__' ||
     !isFiniteNumber(x) ||
     !isFiniteNumber(y) ||
     !isFiniteNumber(width) ||
@@ -34,10 +36,15 @@ function parseNote(value: unknown): Note | null {
   return { id: asNoteId(id), x, y, width, height, text, color, z };
 }
 
-/** Validates untrusted data (storage, network) and drops anything that is not a well-formed note. */
+/** Validates untrusted data (storage, network): drops malformed notes and keeps the last of any duplicated id. */
 export function parseNotes(value: unknown): Note[] {
   if (!Array.isArray(value)) return [];
-  return value.map(parseNote).filter((note): note is Note => note !== null);
+  const byId = new Map<string, Note>();
+  value.forEach((item) => {
+    const note = parseNote(item);
+    if (note) byId.set(note.id, note);
+  });
+  return Array.from(byId.values());
 }
 
 export function serializeNotes(notes: readonly Note[]): string {

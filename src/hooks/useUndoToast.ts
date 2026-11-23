@@ -1,26 +1,47 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNotes } from '../store/useNotes';
 
 export const UNDO_TOAST_MS = 6000;
 
-/** True for a few seconds after a deletion, and false again once it is undone or the time is up. */
-export function useUndoToast(): boolean {
+interface UndoToast {
+  readonly visible: boolean;
+  /** Spread on the toast: the countdown pauses while the pointer or keyboard focus is on it. */
+  readonly hold: {
+    readonly onMouseEnter: () => void;
+    readonly onMouseLeave: () => void;
+    readonly onFocus: () => void;
+    readonly onBlur: () => void;
+  };
+}
+
+/**
+ * The toast shows while something can be undone and its countdown has not run out. Every change to the
+ * history (a new deletion, a partial undo) starts a new countdown; emptying it hides the toast at once.
+ */
+export function useUndoToast(): UndoToast {
   const removals = useNotes((state) => state.removals);
-  const hasRemoved = useNotes((state) => state.removed.length > 0);
-  const [visible, setVisible] = useState(false);
-  const seenRemovals = useRef(removals);
+  const pending = useNotes((state) => state.removed.length);
+  const [held, setHeld] = useState(false);
+  const [expiredKey, setExpiredKey] = useState('');
+
+  const key = `${removals}:${pending}`;
+  const visible = pending > 0 && expiredKey !== key;
 
   useEffect(() => {
-    if (removals === seenRemovals.current) {
-      // The last change was an undo (or a reload of the notes), not a deletion.
-      setVisible(false);
-      return;
-    }
-    seenRemovals.current = removals;
-    setVisible(true);
-    const timer = setTimeout(() => setVisible(false), UNDO_TOAST_MS);
+    if (!visible || held) return;
+    const timer = setTimeout(() => setExpiredKey(key), UNDO_TOAST_MS);
     return () => clearTimeout(timer);
-  }, [removals, hasRemoved]);
+  }, [visible, held, key]);
 
-  return visible && hasRemoved;
+  const hold = useMemo(
+    () => ({
+      onMouseEnter: () => setHeld(true),
+      onMouseLeave: () => setHeld(false),
+      onFocus: () => setHeld(true),
+      onBlur: () => setHeld(false),
+    }),
+    [],
+  );
+
+  return { visible, hold };
 }

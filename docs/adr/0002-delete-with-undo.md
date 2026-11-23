@@ -7,9 +7,9 @@ The dialog protected content, but it blocked the flow, needed focus trapping (`i
 
 ## Decision
 Every deletion (X button, Delete/Backspace on a focused note, drag to trash) removes the note at once and pushes it onto an in-memory history in the store (`removed`, last 20).
-- A toast "Note deleted - Undo" appears for 6 seconds (`UndoToast`, `useUndoToast`). It is a polite live region, so assistive technology announces it.
+- A toast "Note deleted - Undo" appears for 6 seconds (`UndoToast`, `useUndoToast`). The countdown pauses while the pointer or focus is on the toast and restarts after any change to the history. It is a polite live region, so assistive technology announces it.
 - Ctrl/Cmd+Z restores the most recent deletion, repeatedly (`useUndoShortcut`). The shortcut is ignored in text fields so the browser's own text undo keeps working.
-- Restoring keeps the note's id, position, size, colour, text and stacking. Text still waiting on its debounce is committed before removal, so the restored note matches what the user saw.
+- Restoring puts the note back at its original place in the order. Deleted notes are re-fitted when the window shrinks, so a restored note is always reachable. It keeps the note's id, position, size, colour, text and stacking. Text still waiting on its debounce is already committed: every route to a delete control blurs the textarea first, and blur flushes it, so the restored note matches what the user saw.
 - The history is not persisted: a reload starts clean, and the restored or deleted state is what gets saved and synced.
 
 ## Consequences

@@ -74,6 +74,18 @@ describe('notes store', () => {
     expect(store.getState().notes[b]!.z).toBeGreaterThan(store.getState().notes[a]!.z);
   });
 
+  it('constrainTo applies every correction in one notification', () => {
+    const store = createNotesStore();
+    store.getState().create({ x: 900, y: 10, width: 200, height: 200 });
+    store.getState().create({ x: 950, y: 300, width: 200, height: 200 });
+    const onChange = vi.fn();
+    store.subscribe(onChange);
+
+    store.getState().constrainTo({ width: 800, height: 600 });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
   it('constrainTo pulls oversized and out-of-bounds notes back in and leaves fitting ones alone', () => {
     const store = createNotesStore();
     const fits = store.getState().create({ x: 10, y: 10, width: 200, height: 200 });
@@ -113,7 +125,30 @@ describe('undoing a deletion', () => {
     store.getState().undoRemove();
     expect(store.getState().ids).toEqual([b]);
     store.getState().undoRemove();
-    expect(store.getState().ids).toEqual([b, a]);
+    expect(store.getState().ids).toEqual([a, b]);
+  });
+
+  it('puts the note back at its original place in the order', () => {
+    const store = createNotesStore();
+    const [a, b, c] = [rect, rect, rect].map((r) => store.getState().create(r));
+    store.getState().remove(a!);
+    store.getState().remove(c!);
+
+    store.getState().undoRemove();
+    store.getState().undoRemove();
+
+    expect(store.getState().ids).toEqual([a, b, c]);
+  });
+
+  it('keeps deleted notes inside the board, so an undo after the window shrank is reachable', () => {
+    const store = createNotesStore();
+    const far = store.getState().create({ x: 1700, y: 100, width: 200, height: 200 });
+    store.getState().remove(far);
+
+    store.getState().constrainTo({ width: 1100, height: 600 });
+    store.getState().undoRemove();
+
+    expect(store.getState().notes[far]).toMatchObject({ x: 900, y: 100 });
   });
 
   it('is a no-op with nothing to undo', () => {
