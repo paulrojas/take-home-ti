@@ -86,6 +86,18 @@ describe('notes store', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
+  it('constrainTo leaves the notes reference alone when only a deleted note needed fitting', () => {
+    const store = createNotesStore();
+    store.getState().create({ x: 10, y: 10, width: 200, height: 200 });
+    const far = store.getState().create({ x: 1700, y: 100, width: 200, height: 200 });
+    store.getState().remove(far);
+    const notes = store.getState().notes;
+
+    store.getState().constrainTo({ width: 1100, height: 600 });
+
+    expect(store.getState().notes).toBe(notes);
+  });
+
   it('constrainTo pulls oversized and out-of-bounds notes back in and leaves fitting ones alone', () => {
     const store = createNotesStore();
     const fits = store.getState().create({ x: 10, y: 10, width: 200, height: 200 });

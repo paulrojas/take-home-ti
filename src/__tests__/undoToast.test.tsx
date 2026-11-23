@@ -101,6 +101,17 @@ describe('undo toast', () => {
     expect(toast()).toBeNull();
   });
 
+  it('does not stay held after Undo removes the toast under the pointer', () => {
+    deleteNote();
+    act(() => void toast()!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })));
+    act(() => undoButton().click());
+    expect(toast()).toBeNull();
+
+    deleteNote();
+    act(() => void vi.advanceTimersByTime(UNDO_TOAST_MS + 10));
+    expect(toast()).toBeNull();
+  });
+
   it('comes back with a fresh countdown after a partial undo while more can be undone', () => {
     deleteNote();
     deleteNote();

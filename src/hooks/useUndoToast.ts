@@ -21,11 +21,14 @@ interface UndoToast {
 export function useUndoToast(): UndoToast {
   const removals = useNotes((state) => state.removals);
   const pending = useNotes((state) => state.removed.length);
-  const [held, setHeld] = useState(false);
+  const [heldKey, setHeldKey] = useState('');
   const [expiredKey, setExpiredKey] = useState('');
 
   const key = `${removals}:${pending}`;
   const visible = pending > 0 && expiredKey !== key;
+  // A hold belongs to one state of the history. The toast can unmount while it is held (Undo clicked), which
+  // fires no mouseleave, so a hold from an earlier state must not carry over to the next toast.
+  const held = heldKey === key;
 
   useEffect(() => {
     if (!visible || held) return;
@@ -33,15 +36,11 @@ export function useUndoToast(): UndoToast {
     return () => clearTimeout(timer);
   }, [visible, held, key]);
 
-  const hold = useMemo(
-    () => ({
-      onMouseEnter: () => setHeld(true),
-      onMouseLeave: () => setHeld(false),
-      onFocus: () => setHeld(true),
-      onBlur: () => setHeld(false),
-    }),
-    [],
-  );
+  const hold = useMemo(() => {
+    const grab = (): void => setHeldKey(key);
+    const release = (): void => setHeldKey('');
+    return { onMouseEnter: grab, onMouseLeave: release, onFocus: grab, onBlur: release };
+  }, [key]);
 
   return { visible, hold };
 }

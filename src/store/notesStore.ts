@@ -124,20 +124,24 @@ export function createNotesStore(initial: readonly Note[] = []): NotesStore {
       const { notes, removed } = get();
       // One update for the whole board, so a shrinking window causes a single notification and save.
       // Deleted notes are fitted too, so an undo never brings one back outside the board.
+      let notesChanged = false;
+      let removedChanged = false;
       const fitted: Record<NoteId, Note> = {};
-      let changed = false;
       Object.values(notes).forEach((note) => {
         const next = fitNote(note, bounds);
-        if (next !== note) changed = true;
+        if (next !== note) notesChanged = true;
         fitted[note.id] = next;
       });
       const fittedRemoved = removed.map((entry) => {
         const next = fitNote(entry.note, bounds);
         if (next === entry.note) return entry;
-        changed = true;
+        removedChanged = true;
         return { ...entry, note: next };
       });
-      if (changed) set({ notes: fitted, removed: fittedRemoved });
+      // Keep each reference when it did not change: a new `notes` object means "save", history alone does not.
+      if (notesChanged || removedChanged) {
+        set({ notes: notesChanged ? fitted : notes, removed: removedChanged ? fittedRemoved : removed });
+      }
     },
 
     replaceAll(next) {
