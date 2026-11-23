@@ -17,7 +17,7 @@ export function useUndoShortcut(): void {
       if (!isUndo || event.repeat || event.defaultPrevented || isTextField(event.target)) return;
       if (store.getState().removed.length === 0) return;
       event.preventDefault();
-      store.getState().undoRemove();
+      store.getState().undoLast();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

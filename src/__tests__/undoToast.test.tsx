@@ -1,9 +1,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { UndoToast } from '../components/UndoToast';
+import { MAX_VISIBLE_TOASTS, UndoToast } from '../components/UndoToast';
 import { useUndoShortcut } from '../hooks/useUndoShortcut';
-import { MAX_VISIBLE_TOASTS, UNDO_TOAST_MS } from '../hooks/useToastCountdown';
+import { UNDO_TOAST_MS } from '../hooks/useToastCountdown';
 import { createMockNotesApi } from '../services/notesApi';
 import { createLocalNotesCache } from '../services/persistence';
 import { SyncController } from '../services/syncController';
@@ -53,6 +53,8 @@ function deleteNote(text = ''): NoteId {
 const advance = (ms: number): void => void act(() => void vi.advanceTimersByTime(ms));
 const hover = (el: HTMLElement, type: 'mouseover' | 'mouseout'): void =>
   void act(() => void el.dispatchEvent(new MouseEvent(type, { bubbles: true })));
+const focusEvent = (el: HTMLElement, type: 'focusin' | 'focusout'): void =>
+  void act(() => void el.dispatchEvent(new FocusEvent(type, { bubbles: true })));
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -133,6 +135,44 @@ describe('undo toasts', () => {
     hover(toasts()[0]!, 'mouseout');
     advance(UNDO_TOAST_MS + 10);
     expect(toasts()).toHaveLength(0);
+  });
+
+  it('stay held by keyboard focus after the pointer has left', () => {
+    deleteNote('focused');
+    focusEvent(toast()!, 'focusin');
+    hover(toast()!, 'mouseover');
+    hover(toast()!, 'mouseout');
+
+    advance(UNDO_TOAST_MS * 3);
+    expect(toasts()).toHaveLength(1);
+
+    focusEvent(toast()!, 'focusout');
+    advance(UNDO_TOAST_MS + 10);
+    expect(toasts()).toHaveLength(0);
+  });
+
+  it('stay hidden once expired, even when a later undo makes room in the visible window', () => {
+    for (let i = 0; i < MAX_VISIBLE_TOASTS + 2; i += 1) deleteNote(`note ${i}`);
+    advance(UNDO_TOAST_MS + 10);
+    expect(toasts()).toHaveLength(0);
+
+    pressUndo();
+
+    expect(toasts()).toHaveLength(0);
+  });
+
+  it('advertise the shortcut only on the newest deletion', () => {
+    deleteNote('older');
+    deleteNote('newer');
+
+    expect(undoButton(0).getAttribute('aria-keyshortcuts')).toBe('Control+Z Meta+Z');
+    expect(undoButton(1).hasAttribute('aria-keyshortcuts')).toBe(false);
+  });
+
+  it('cut long previews by code point, never inside an emoji', () => {
+    deleteNote('x'.repeat(59) + '😀' + 'tail');
+
+    expect(toast()!.querySelector('.toast__preview')!.textContent).toBe('x'.repeat(59) + '😀');
   });
 
   it('do not stay held after Undo removes the toast under the pointer', () => {

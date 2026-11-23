@@ -155,11 +155,8 @@ test.describe('undo', () => {
   test('every deletion gets its own toast, stacked in the top-right corner below the toolbar', async ({ page }) => {
     await addNote(page);
     await addNote(page);
-    for (const label of ['one', 'two', 'three']) {
-      const index = ['one', 'two', 'three'].indexOf(label);
-      await textArea(note(page, index)).fill(label);
-    }
-    for (let i = 0; i < 3; i += 1) await note(page, 0).getByRole('button', { name: 'Delete note' }).click();
+    for (const [index, label] of ['one', 'two', 'three'].entries()) await textArea(note(page, index)).fill(label);
+    for (let i = 0; i < 3; i += 1) await deleteButton(page).click();
 
     const buttons = toastRegion(page).getByRole('button', { name: /^Undo/ });
     await expect(buttons).toHaveCount(3);
@@ -172,7 +169,7 @@ test.describe('undo', () => {
       expect(b.x + b.width).toBeLessThanOrEqual(viewport.width);
       expect(b.y).toBeGreaterThan(toolbar.y + toolbar.height);
     }
-    // Newest on top: the first toast is the one Ctrl/Cmd+Z would restore.
+    // Newest on top: while it is on screen, the first toast is the one Ctrl/Cmd+Z restores.
     expect(boxes[0]!.y).toBeLessThan(boxes[1]!.y);
     expect(boxes[1]!.y).toBeLessThan(boxes[2]!.y);
     await expect(buttons.first()).toHaveAccessibleName('Undo delete: three');
@@ -182,8 +179,8 @@ test.describe('undo', () => {
     await addNote(page);
     await textArea(note(page, 0)).fill('older');
     await textArea(note(page, 1)).fill('newer');
-    await note(page, 0).getByRole('button', { name: 'Delete note' }).click();
-    await note(page, 0).getByRole('button', { name: 'Delete note' }).click();
+    await deleteButton(page).click();
+    await deleteButton(page).click();
     await expect(notes(page)).toHaveCount(0);
 
     await toastRegion(page).getByRole('button', { name: 'Undo delete: older' }).click();

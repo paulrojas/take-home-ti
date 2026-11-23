@@ -82,7 +82,7 @@ describe('Note delete button', () => {
 
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
     expect(store.getState().notes[id]).toBeUndefined();
-    act(() => store.getState().undoRemove());
+    act(() => store.getState().undoLast());
     expect(store.getState().notes[id]?.text).toBe('keep me');
   });
 });

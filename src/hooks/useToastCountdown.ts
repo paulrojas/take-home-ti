@@ -1,39 +1,38 @@
 import { useEffect, useMemo, useState } from 'react';
 
 export const UNDO_TOAST_MS = 6000;
-/** Newest toasts shown at once; older deletions stay undoable with Ctrl/Cmd+Z. */
-export const MAX_VISIBLE_TOASTS = 4;
 
-interface ToastCountdown {
-  readonly expired: boolean;
-  /** Spread on the toast: the countdown pauses while the pointer or keyboard focus is on it. */
-  readonly hold: {
-    readonly onMouseEnter: () => void;
-    readonly onMouseLeave: () => void;
-    readonly onFocus: () => void;
-    readonly onBlur: () => void;
-  };
+interface ToastHold {
+  readonly onMouseEnter: () => void;
+  readonly onMouseLeave: () => void;
+  readonly onFocus: () => void;
+  readonly onBlur: () => void;
 }
 
 /**
- * Lifetime of one toast. The state lives with the toast, so removing it (for example by clicking Undo while
- * the pointer is on it, which fires no mouseleave) discards a held state with it.
+ * Lifetime of one toast: `onExpire` runs once the countdown ends. It pauses while the pointer or keyboard
+ * focus is on the toast (spread `hold` on it), and each input is tracked on its own, so leaving with the mouse
+ * does not end a hold that focus still has. The state lives with the toast, so removing a held toast (Undo
+ * clicked under the pointer, which fires no mouseleave) discards its hold too.
  */
-export function useToastCountdown(durationMs: number = UNDO_TOAST_MS): ToastCountdown {
-  const [held, setHeld] = useState(false);
-  const [expired, setExpired] = useState(false);
+export function useToastCountdown(onExpire: () => void): ToastHold {
+  const [pointerOver, setPointerOver] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const held = pointerOver || focused;
 
   useEffect(() => {
-    if (held || expired) return;
-    const timer = setTimeout(() => setExpired(true), durationMs);
+    if (held) return;
+    const timer = setTimeout(onExpire, UNDO_TOAST_MS);
     return () => clearTimeout(timer);
-  }, [held, expired, durationMs]);
+  }, [held, onExpire]);
 
-  const hold = useMemo(() => {
-    const grab = (): void => setHeld(true);
-    const release = (): void => setHeld(false);
-    return { onMouseEnter: grab, onMouseLeave: release, onFocus: grab, onBlur: release };
-  }, []);
-
-  return { expired, hold };
+  return useMemo(
+    () => ({
+      onMouseEnter: () => setPointerOver(true),
+      onMouseLeave: () => setPointerOver(false),
+      onFocus: () => setFocused(true),
+      onBlur: () => setFocused(false),
+    }),
+    [],
+  );
 }

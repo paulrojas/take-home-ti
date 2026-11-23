@@ -8,7 +8,7 @@ Dragging, resizing and typing must not re-render the board or other notes. The f
 ## Decision
 Use Zustand's vanilla `createStore` (`src/store/notesStore.ts`).
 - The store still lives outside React, so services (`SyncController`) and unit tests use it without rendering anything.
-- State is `{ notes: Record<NoteId, Note>, ids, removed, removals }` plus actions (`create`, `update`, `remove`, `undoRemove`, `bringToFront`, `constrainTo`, `replaceAll`). Notes stay immutable records.
+- State is `{ notes: Record<NoteId, Note>, ids, removed }` plus actions (`create`, `update`, `remove`, `undoLast`, `undoRemove`, `bringToFront`, `constrainTo`, `replaceAll`). Notes stay immutable records.
 - Components subscribe through selectors (`useNotes`): a note reads `state.notes[id]`, the board reads `state.ids`. A selector result is compared by reference, so editing note A leaves note B and the board untouched, and `ids` keeps its identity until a note is added or removed.
 - `SyncController` subscribes once and reacts only when `state.notes` changes, so undo history alone never triggers a save. "Did the store change while the API call was in flight" is a reference comparison of `notes`, which replaces the old version counter.
 

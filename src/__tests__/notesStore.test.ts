@@ -120,7 +120,7 @@ describe('undoing a deletion', () => {
     const original = store.getState().notes[a];
 
     store.getState().remove(a);
-    store.getState().undoRemove();
+    store.getState().undoLast();
 
     expect(store.getState().notes[a]).toEqual(original);
     expect(store.getState().ids).toContain(a);
@@ -134,9 +134,9 @@ describe('undoing a deletion', () => {
     store.getState().remove(a);
     store.getState().remove(b);
 
-    store.getState().undoRemove();
+    store.getState().undoLast();
     expect(store.getState().ids).toEqual([b]);
-    store.getState().undoRemove();
+    store.getState().undoLast();
     expect(store.getState().ids).toEqual([a, b]);
   });
 
@@ -146,8 +146,8 @@ describe('undoing a deletion', () => {
     store.getState().remove(a!);
     store.getState().remove(c!);
 
-    store.getState().undoRemove();
-    store.getState().undoRemove();
+    store.getState().undoLast();
+    store.getState().undoLast();
 
     expect(store.getState().ids).toEqual([a, b, c]);
   });
@@ -158,7 +158,7 @@ describe('undoing a deletion', () => {
     store.getState().remove(far);
 
     store.getState().constrainTo({ width: 1100, height: 600 });
-    store.getState().undoRemove();
+    store.getState().undoLast();
 
     expect(store.getState().notes[far]).toMatchObject({ x: 900, y: 100 });
   });
@@ -168,22 +168,45 @@ describe('undoing a deletion', () => {
     const [a, b, c] = [rect, rect, rect].map((r) => store.getState().create(r));
     [a!, b!, c!].forEach((id) => store.getState().remove(id));
 
-    store.getState().undoRemove(b);
+    store.getState().undoRemove(b!);
 
     expect(store.getState().ids).toEqual([b]);
     expect(store.getState().removed.map((entry) => entry.note.id)).toEqual([a, c]);
   });
 
-  it('clamps the original index when the order has shrunk since the deletion', () => {
+  it('keeps the original order whatever order the deletions are undone in', () => {
     const store = createNotesStore();
     const [a, b, c] = [rect, rect, rect].map((r) => store.getState().create(r));
-    store.getState().remove(c!);
     store.getState().remove(b!);
     store.getState().remove(a!);
 
-    store.getState().undoRemove(c);
+    store.getState().undoRemove(b!);
+    expect(store.getState().ids).toEqual([b, c]);
+    store.getState().undoRemove(a!);
 
-    expect(store.getState().ids).toEqual([c]);
+    expect(store.getState().ids).toEqual([a, b, c]);
+  });
+
+  it('puts a note after the nearest earlier neighbour that still exists', () => {
+    const store = createNotesStore();
+    const [a, b, c, d] = [rect, rect, rect, rect].map((r) => store.getState().create(r));
+    store.getState().remove(c!);
+    store.getState().remove(b!);
+
+    store.getState().undoRemove(c!);
+
+    expect(store.getState().ids).toEqual([a, c, d]);
+  });
+
+  it('puts a note first when everything ahead of it is gone', () => {
+    const store = createNotesStore();
+    const [a, b] = [rect, rect].map((r) => store.getState().create(r));
+    store.getState().remove(b!);
+    store.getState().remove(a!);
+
+    store.getState().undoRemove(b!);
+
+    expect(store.getState().ids).toEqual([b]);
   });
 
   it('ignores an id that was never deleted', () => {
@@ -209,7 +232,7 @@ describe('undoing a deletion', () => {
     const store = createNotesStore();
     const onChange = vi.fn();
     store.subscribe(onChange);
-    store.getState().undoRemove();
+    store.getState().undoLast();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -218,7 +241,7 @@ describe('undoing a deletion', () => {
     const a = store.getState().create(rect);
     store.getState().remove(a);
     const b = store.getState().create(rect);
-    store.getState().undoRemove();
+    store.getState().undoLast();
     expect(store.getState().notes[b]!.z).toBeGreaterThan(store.getState().notes[a]!.z);
   });
 
