@@ -152,6 +152,47 @@ test.describe('undo', () => {
     await expect(toastRegion(page)).toBeEmpty();
   });
 
+  test('every deletion gets its own toast, stacked in the top-right corner below the toolbar', async ({ page }) => {
+    await addNote(page);
+    await addNote(page);
+    for (const label of ['one', 'two', 'three']) {
+      const index = ['one', 'two', 'three'].indexOf(label);
+      await textArea(note(page, index)).fill(label);
+    }
+    for (let i = 0; i < 3; i += 1) await note(page, 0).getByRole('button', { name: 'Delete note' }).click();
+
+    const buttons = toastRegion(page).getByRole('button', { name: /^Undo/ });
+    await expect(buttons).toHaveCount(3);
+
+    const viewport = page.viewportSize()!;
+    const toolbar = await box(page.getByRole('banner'));
+    const boxes = [await box(buttons.nth(0)), await box(buttons.nth(1)), await box(buttons.nth(2))];
+    for (const b of boxes) {
+      expect(b.x + b.width).toBeGreaterThan(viewport.width - 60);
+      expect(b.x + b.width).toBeLessThanOrEqual(viewport.width);
+      expect(b.y).toBeGreaterThan(toolbar.y + toolbar.height);
+    }
+    // Newest on top: the first toast is the one Ctrl/Cmd+Z would restore.
+    expect(boxes[0]!.y).toBeLessThan(boxes[1]!.y);
+    expect(boxes[1]!.y).toBeLessThan(boxes[2]!.y);
+    await expect(buttons.first()).toHaveAccessibleName('Undo delete: three');
+  });
+
+  test("Undo on an older toast restores that note and keeps the other toasts", async ({ page }) => {
+    await addNote(page);
+    await textArea(note(page, 0)).fill('older');
+    await textArea(note(page, 1)).fill('newer');
+    await note(page, 0).getByRole('button', { name: 'Delete note' }).click();
+    await note(page, 0).getByRole('button', { name: 'Delete note' }).click();
+    await expect(notes(page)).toHaveCount(0);
+
+    await toastRegion(page).getByRole('button', { name: 'Undo delete: older' }).click();
+
+    await expect(notes(page)).toHaveCount(1);
+    await expect(textArea(note(page))).toHaveValue('older');
+    await expect(toastRegion(page).getByRole('button', { name: 'Undo delete: newer' })).toBeVisible();
+  });
+
   test('restores a note deleted by dragging it to the trash', async ({ page }) => {
     await startDragToTrash(page);
     await page.mouse.up();

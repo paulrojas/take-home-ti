@@ -9,6 +9,8 @@ export const UNDO_LIMIT = 20;
 export interface RemovedNote {
   readonly note: Note;
   readonly index: number;
+  /** Increases with every deletion; a stable identity for the toast that offers its undo. */
+  readonly seq: number;
 }
 
 export interface NotesState {
@@ -18,13 +20,16 @@ export interface NotesState {
   readonly ids: readonly NoteId[];
   /** Deleted notes, most recent last. Memory only: never persisted. */
   readonly removed: readonly RemovedNote[];
-  /** Counts deletions, so the UI can tell a new deletion from an undo. */
+  /** Counts deletions; the source of `RemovedNote.seq`. */
   readonly removals: number;
   readonly create: (rect: Rect, color?: NoteColor) => NoteId;
   readonly update: (id: NoteId, changes: NoteChanges) => void;
   readonly remove: (id: NoteId) => void;
-  /** Restores the most recently deleted note with its original id, content, stacking and place in the order. */
-  readonly undoRemove: () => void;
+  /**
+   * Restores a deleted note with its original id, content, stacking and place in the order: the one given,
+   * or the most recent deletion when no id is passed.
+   */
+  readonly undoRemove: (id?: NoteId) => void;
   readonly bringToFront: (id: NoteId) => void;
   /** Pulls notes that no longer fit (e.g. after the window shrank) back inside the bounds. */
   readonly constrainTo: (bounds: Size) => void;
@@ -96,21 +101,23 @@ export function createNotesStore(initial: readonly Note[] = []): NotesStore {
         return {
           notes,
           ids: state.ids.filter((existing) => existing !== id),
-          removed: [...state.removed, { note, index }].slice(-UNDO_LIMIT),
+          removed: [...state.removed, { note, index, seq: state.removals + 1 }].slice(-UNDO_LIMIT),
           removals: state.removals + 1,
         };
       });
     },
 
-    undoRemove() {
+    undoRemove(id) {
       const { removed } = get();
-      const last = removed[removed.length - 1];
-      if (!last) return;
-      const { note, index } = last;
+      const position = id === undefined ? removed.length - 1 : removed.findIndex((entry) => entry.note.id === id);
+      const entry = removed[position];
+      if (!entry) return;
+      const { note, index } = entry;
       set((state) => ({
         notes: { ...state.notes, [note.id]: note },
+        // The order may have changed since the deletion; slice clamps an index that is now too large.
         ids: [...state.ids.slice(0, index), note.id, ...state.ids.slice(index)],
-        removed: removed.slice(0, -1),
+        removed: removed.filter((_, at) => at !== position),
       }));
     },
 

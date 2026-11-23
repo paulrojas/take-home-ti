@@ -163,6 +163,48 @@ describe('undoing a deletion', () => {
     expect(store.getState().notes[far]).toMatchObject({ x: 900, y: 100 });
   });
 
+  it('restores a chosen deletion and leaves the others undoable', () => {
+    const store = createNotesStore();
+    const [a, b, c] = [rect, rect, rect].map((r) => store.getState().create(r));
+    [a!, b!, c!].forEach((id) => store.getState().remove(id));
+
+    store.getState().undoRemove(b);
+
+    expect(store.getState().ids).toEqual([b]);
+    expect(store.getState().removed.map((entry) => entry.note.id)).toEqual([a, c]);
+  });
+
+  it('clamps the original index when the order has shrunk since the deletion', () => {
+    const store = createNotesStore();
+    const [a, b, c] = [rect, rect, rect].map((r) => store.getState().create(r));
+    store.getState().remove(c!);
+    store.getState().remove(b!);
+    store.getState().remove(a!);
+
+    store.getState().undoRemove(c);
+
+    expect(store.getState().ids).toEqual([c]);
+  });
+
+  it('ignores an id that was never deleted', () => {
+    const store = createNotesStore();
+    const a = store.getState().create(rect);
+    const onChange = vi.fn();
+    store.subscribe(onChange);
+
+    store.getState().undoRemove(a);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('numbers deletions in increasing order', () => {
+    const store = createNotesStore();
+    store.getState().remove(store.getState().create(rect));
+    store.getState().remove(store.getState().create(rect));
+    const seqs = store.getState().removed.map((entry) => entry.seq);
+    expect(seqs[1]).toBeGreaterThan(seqs[0]!);
+  });
+
   it('is a no-op with nothing to undo', () => {
     const store = createNotesStore();
     const onChange = vi.fn();

@@ -264,9 +264,14 @@ button {
 
 .toast-region {
   position: fixed;
-  left: 20px;
-  bottom: 20px;
+  top: calc(var(--toolbar-height) + 12px);
+  right: 20px;
   z-index: 1500000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 40px));
   pointer-events: none;
 }
 
@@ -274,6 +279,7 @@ button {
   display: flex;
   align-items: center;
   gap: 16px;
+  max-width: 100%;
   padding: 10px 12px 10px 16px;
   border-radius: 6px;
   background: #323130;
@@ -282,7 +288,23 @@ button {
   pointer-events: auto;
 }
 
+.toast__message {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.toast__preview {
+  overflow: hidden;
+  max-width: 240px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toast__action {
+  flex: none;
   height: 28px;
   padding: 0 12px;
   border: 1px solid rgba(255, 255, 255, 0.6);

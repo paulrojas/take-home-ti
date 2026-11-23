@@ -25,7 +25,7 @@ npm run e2e          # builds, then runs the end-to-end suite in all browsers
 
 - Create a note: **New note** button, or drag on empty board space to draw one at any position and size
 - Move (drag the colored header), resize (bottom-right grip), delete (drag the note so it overlaps the trash zone, or the × button / Delete key)
-- Deleting never asks first: a toast offers **Undo** and Ctrl/Cmd+Z restores deleted notes one by one
+- Deleting never asks first: each deletion gets a stacked **Undo** toast (top right) and Ctrl/Cmd+Z restores deleted notes one by one
 - Bring to front on click, text editing, six colors (⋯ menu in the header)
 - Notes persist to localStorage and sync to a mocked asynchronous REST API (`src/services/notesApi.ts`), with a save status indicator
 - Windows smaller than 1024×768 get a warning overlay asking the user to enlarge the window
